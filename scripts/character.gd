@@ -1,6 +1,7 @@
 class_name ConquerCharacter
 extends Node2D
 
+var active: bool = true
 var team: int = 0
 var config: GameConfig
 var velocity := Vector2.ZERO
@@ -10,7 +11,7 @@ var clock: float = 0.0
 var previous := Vector2.ZERO
 var trail: ConquerTrail
 var sprite: Sprite2D
-var atlas: Texture2D = preload("res://assets/characters/characters.png")
+var atlas: Texture2D = preload("res://assets/characters/cats.png")
 
 func setup(index: int, settings: GameConfig) -> void:
 	team = index
@@ -23,9 +24,10 @@ func setup(index: int, settings: GameConfig) -> void:
 	sprite = Sprite2D.new()
 	var texture := AtlasTexture.new()
 	texture.atlas = atlas
-	var cell: float = float(atlas.get_width()) / 3.0
-	texture.region = Rect2(cell * team, 0, cell, atlas.get_height())
-	sprite.texture = preload("res://assets/characters/purple_player.png") if team == 0 else texture
+	var cell: float = float(atlas.get_width()) / 4.0
+	var index: int = config.cat_indices[team]
+	texture.region = Rect2(Vector2(index % 4 * cell, index / 4 * atlas.get_height() / 2), Vector2(cell, atlas.get_height() / 2))
+	sprite.texture = texture
 	sprite.scale = Vector2.ONE * (94.0 / float(sprite.texture.get_width()))
 	sprite.position.y = -34.0
 	add_child(sprite)
@@ -41,9 +43,19 @@ func reset_actor() -> void:
 func advance(direction: Vector2, delta: float, island: PackedVector2Array) -> void:
 	previous = position
 	var speed: float = config.player_speed if team == 0 else config.bot_speed
-	velocity = velocity.move_toward(direction.limit_length() * speed, config.acceleration * delta)
+	velocity = velocity.move_toward(direction.limit_length() * speed, (config.player_acceleration if team == 0 else config.acceleration) * delta)
 	var target: Vector2 = position + velocity * delta
-	if Geometry2D.is_point_in_polygon(target, island):
+	var hit_distance: float = INF
+	var hit_point: Vector2 = target
+	for i in island.size():
+		var hit: Variant = Geometry2D.segment_intersects_segment(position, target, island[i], island[(i + 1) % island.size()])
+		if hit != null and position.distance_to(hit) > 0.001 and position.distance_to(hit) < hit_distance:
+			hit_distance = position.distance_to(hit)
+			hit_point = hit
+	if hit_distance < INF:
+		position = IslandGeometry.clamp_inside(island, hit_point)
+		velocity = Vector2.ZERO
+	elif Geometry2D.is_point_in_polygon(target, island):
 		position = target
 	else:
 		var boundary: Dictionary = IslandGeometry.nearest(island, target)

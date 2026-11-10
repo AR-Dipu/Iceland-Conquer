@@ -169,6 +169,8 @@ static func clamp_inside(poly: PackedVector2Array, target: Vector2) -> Vector2:
 	if Geometry2D.is_point_in_polygon(target, poly):
 		return target
 	var near: Dictionary = nearest(poly, target)
+	if Geometry2D.is_point_in_polygon(near.point, poly):
+		return near.point
 	var edge: int = near.edge
 	var normal: Vector2 = poly[edge].direction_to(poly[(edge + 1) % poly.size()]).orthogonal()
 	for offset in [0.8, -0.8, 2.0, -2.0]:

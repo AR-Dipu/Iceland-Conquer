@@ -51,7 +51,11 @@ func _build_navigation() -> void:
 			if shared == 2:
 				navigation.connect_points(i, j)
 
-func _build_homes() -> void:
+func _build_homes(count: int = 3) -> void:
+	spawn_points.clear()
+	initial_territories = []
+	for slot in count:
+		initial_territories.append([])
 	var candidates: Array[Vector2] = []
 	for y in range(40, ceili(land_bounds.size.y), 65):
 		for x in range(40, ceili(land_bounds.size.x), 65):
@@ -60,8 +64,8 @@ func _build_homes() -> void:
 				candidates.append(p)
 	if candidates.is_empty():
 		candidates.append(center)
-	var preferred: Vector2 = land_bounds.position + land_bounds.size * Vector2(0.42, 0.65)
-	for team in 3:
+	var preferred: Vector2 = land_bounds.position + land_bounds.size * Vector2(randf_range(0.25,0.75),randf_range(0.25,0.75))
+	for team in count:
 		var best: float = -INF
 		var chosen: Vector2 = center
 		for p in candidates:
@@ -77,11 +81,11 @@ func _build_homes() -> void:
 				chosen = p
 		spawn_points.append(chosen)
 	var separation: float = INF
-	for i in 3:
-		for j in range(i + 1, 3):
+	for i in count:
+		for j in range(i + 1, count):
 			separation = minf(separation, spawn_points[i].distance_to(spawn_points[j]))
 	home_radius = minf(sqrt(IslandGeometry.area(outline) * 0.10 / PI), separation * 0.37)
-	for team in 3:
+	for team in count:
 		var radius: float = home_radius * (1.1 if team == 0 else 0.95)
 		var patch := IslandGeometry.blob(spawn_points[team], Vector2.ONE * radius, team * 1.3, 80)
 		initial_territories[team] = Geometry2D.intersect_polygons(patch, outline)
@@ -135,9 +139,9 @@ func route(start: Vector2, target: Vector2) -> PackedVector2Array:
 	return result
 
 func valid() -> bool:
-	if not IslandGeometry.simple(outline) or spawn_points.size() != 3:
+	if not IslandGeometry.simple(outline) or spawn_points.size() < 3:
 		return false
-	for team in 3:
+	for team in spawn_points.size():
 		var home: Array[PackedVector2Array] = []
 		for p in initial_territories[team]:
 			home.append(p)

@@ -1,12 +1,13 @@
 extends Node2D
 ## Explicit session states keep input, AI and loading transitions independent.
-enum State { SELECTION, LOADING, PLAYING, PAUSED, ROUND_OVER }
+enum State { SELECTION, LOADING, PLAYING, PAUSED, ROUND_OVER, DEFEATED, DEMO_AD }
 const CHARACTER_SCENE: PackedScene = preload("res://scenes/character.tscn")
 var config: GameConfig = preload("res://resources/default_config.tres").duplicate(true)
 var state: State = State.SELECTION
 var running: bool:
 	get:
 		return state == State.PLAYING
+var difficulty: int = 0
 var selected_country: String = "bgd"
 var catalog: CountryCatalog
 var current_map: CountryMap
@@ -27,9 +28,15 @@ var feedback: Node2D
 var popups: Array[Dictionary] = []
 var frame: int = 0
 var preview_path: String = ""
+var reward: DemoRewardService
+var reward_token: int = -1
 
 func _ready() -> void:
 	get_tree().quit_on_go_back = false
+	reward = DemoRewardService.new()
+	add_child(reward)
+	reward.completed.connect(_reward_completed)
+	reward.progress.connect(func(left: float) -> void: hud.demo_remaining = left; hud.queue_redraw())
 	catalog = CountryCatalog.new()
 	var ocean_layer := CanvasLayer.new()
 	ocean_layer.layer = -100
@@ -50,11 +57,14 @@ func _ready() -> void:
 	hud.resume_requested.connect(resume_round)
 	hud.restart_requested.connect(start_round)
 	hud.choose_country_requested.connect(choose_country)
+	hud.revive_requested.connect(begin_revive)
+	hud.cancel_ad_requested.connect(cancel_revive)
 	selector = CountrySelector.new()
 	ui_root.add_child(selector)
 	selector.setup(catalog, hud.font)
 	selector.country_selected.connect(_country_selected)
 	selector.play_requested.connect(start_round)
+	selector.difficulty_changed.connect(func(value: int) -> void: difficulty = value; hud.difficulty_name = ["EASY","MEDIUM","HARD"][value])
 	get_viewport().size_changed.connect(_layout)
 	_layout()
 	_set_state(State.SELECTION)
@@ -86,7 +96,7 @@ func _country_selected(country_id: String) -> void:
 
 func _set_state(next: State) -> void:
 	state = next
-	var labels: Array[String] = ["selection", "loading", "playing", "paused", "round_over"]
+	var labels: Array[String] = ["selection", "loading", "playing", "paused", "round_over", "defeated", "demo_ad"]
 	hud.set_mode(labels[state], winning_team)
 	selector.visible = state == State.SELECTION or state == State.LOADING
 	selector.play_button.disabled = state == State.LOADING
@@ -122,7 +132,16 @@ func load_country(country_id: String) -> bool:
 	current_map = choice
 	selected_country = country_id
 	island = current_map.outline
+	current_map._build_homes([4,6,8][difficulty])
 	config.spawn_points = current_map.spawn_points.duplicate()
+	var palette: Array[int] = [1,2,3,4,5,6,7]
+	palette.shuffle()
+	config.cat_indices = [0]
+	config.cat_indices.append_array(palette)
+	var colors: Array[Color] = [Color("9b5cff"),Color("ff5b68"),Color("ffd33d"),Color("59d68b"),Color("23cde3"),Color("ff993f"),Color("f777c5"),Color("4388f4")]
+	config.team_colors.clear()
+	for index in config.cat_indices:
+		config.team_colors.append(colors[index])
 	world_root = Node2D.new()
 	world_root.name = "CountryWorld"
 	add_child(world_root)
@@ -134,7 +153,7 @@ func load_country(country_id: String) -> bool:
 	territory.setup(config, current_map)
 	territory.territory_changed.connect(hud.update_scores)
 	territory.captured.connect(_captured)
-	for team in 3:
+	for team in config.spawn_points.size():
 		var actor: ConquerCharacter = CHARACTER_SCENE.instantiate()
 		actor.setup(team, config)
 		world_root.add_child(actor.trail)
@@ -149,7 +168,7 @@ func load_country(country_id: String) -> bool:
 	camera = Camera2D.new()
 	camera.name = "FollowCamera"
 	camera.position_smoothing_enabled = true
-	camera.position_smoothing_speed = 5.5
+	camera.position_smoothing_speed = 8.0
 	camera.zoom = Vector2.ONE * 0.9
 	camera.limit_left = floori(current_map.camera_bounds.position.x)
 	camera.limit_top = floori(current_map.camera_bounds.position.y)
@@ -169,6 +188,8 @@ func load_country(country_id: String) -> bool:
 func start_round() -> void:
 	if state == State.LOADING:
 		return
+	reward.cancel()
+	reward_token = -1
 	winning_team = -1
 	if not load_country(selected_country):
 		selector.message = "This island could not load. Choose another."
@@ -179,6 +200,8 @@ func start_round() -> void:
 	_set_state(State.PLAYING)
 
 func choose_country(reason: String = "") -> void:
+	reward.cancel()
+	reward_token = -1
 	for actor in actors:
 		actor.velocity = Vector2.ZERO
 		actor.previous = actor.position
@@ -203,6 +226,8 @@ func _physics_process(delta: float) -> void:
 	if state != State.PLAYING:
 		return
 	for actor in actors:
+		if not actor.active:
+			continue
 		if actor.trail.points.is_empty() and territory.owned(actor.team, actor.position):
 			home_points[actor.team] = actor.position
 			home_regions[actor.team] = territory.region_at(actor.team, actor.position)
@@ -218,6 +243,8 @@ func _physics_process(delta: float) -> void:
 	if state != State.PLAYING:
 		return
 	for actor in actors:
+		if not actor.active:
+			continue
 		_update_trail(actor)
 		if state != State.PLAYING:
 			return
@@ -225,11 +252,14 @@ func _physics_process(delta: float) -> void:
 
 func _resolve_attacks() -> void:
 	var defeated: Array[int] = []
+	var killers: Dictionary = {}
 	for attacker in actors:
+		if not attacker.active:
+			continue
 		if attacker.previous.distance_squared_to(attacker.position) < 0.001:
 			continue
 		for victim in actors:
-			if victim.protection > 0 or victim.trail.points.size() < 2:
+			if not victim.active or victim.protection > 0 or victim.trail.points.size() < 2:
 				continue
 			if attacker == victim:
 				if not territory.owned(victim.team, victim.position) and victim.trail.hits(attacker.previous, attacker.position, 5.0, 5):
@@ -238,11 +268,16 @@ func _resolve_attacks() -> void:
 			elif victim.trail.hits(attacker.previous, attacker.position, config.trail_hit_radius):
 				if not defeated.has(victim.team):
 					defeated.append(victim.team)
-	if defeated.has(0):
-		choose_country("Your tail was cut!")
-		return
+					killers[victim.team] = attacker.team
+	defeated.sort()
 	for team in defeated:
-		reset_character(team)
+		if team > 0:
+			eliminate_bot(team, int(killers.get(team, -1)))
+	if defeated.has(0):
+		actors[0].trail.clear()
+		_set_state(State.DEFEATED)
+		return
+
 
 func _update_trail(actor: ConquerCharacter) -> void:
 	var trail: ConquerTrail = actor.trail
@@ -270,6 +305,10 @@ func _update_trail(actor: ConquerCharacter) -> void:
 				hud.show_toast("Trail too long. Try a smaller loop!")
 
 func reset_character(team: int) -> void:
+	if not actors[team].active:
+		return
+	if team == 0:
+		hud.mobile.release()
 	territory.reset_team(team)
 	actors[team].reset_actor()
 	brains[team].reset()
@@ -302,8 +341,10 @@ func _back() -> void:
 			pause_round()
 		State.PAUSED:
 			resume_round()
-		State.ROUND_OVER:
+		State.ROUND_OVER, State.DEFEATED:
 			choose_country()
+		State.DEMO_AD:
+			cancel_revive()
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
@@ -337,3 +378,58 @@ func _capture_preview() -> void:
 	var error: Error = image.save_png(preview_path)
 	print("PREVIEW_SAVED ", preview_path, " error=", error)
 	get_tree().quit(0 if error == OK else 1)
+
+func begin_revive() -> void:
+	if state != State.DEFEATED:
+		return
+	_set_state(State.DEMO_AD)
+	hud.demo_remaining = 5
+	reward_token = reward.begin()
+func cancel_revive() -> void:
+	if state != State.DEMO_AD:
+		return
+	reward.cancel()
+	reward_token = -1
+	_set_state(State.DEFEATED)
+func _reward_completed(token: int) -> void:
+	if state != State.DEMO_AD or token != reward_token:
+		return
+	reward_token = -1
+	var actor: ConquerCharacter = actors[0]
+	if territory.regions[0].is_empty():
+		var patch: PackedVector2Array = IslandGeometry.blob(config.spawn_points[0], Vector2.ONE * 80)
+		territory.regions[0] = Geometry2D.intersect_polygons(patch, island)
+		for piece in territory.regions[0]:
+			territory._remove_from_others(0, piece)
+		territory._update_fractions()
+	var safe: Vector2 = config.spawn_points[0]
+	var distance: float = INF
+	for piece in territory.regions[0]:
+		var candidate: Vector2 = IslandGeometry.interior_point(piece)
+		if candidate.distance_to(actor.position) < distance:
+			distance = candidate.distance_to(actor.position)
+			safe = candidate
+	actor.position = safe
+	actor.previous = safe
+	actor.trail.clear()
+	actor.protection = 3.0
+	home_points[0] = safe
+	home_regions[0] = territory.region_at(0, safe)
+	_set_state(State.PLAYING)
+
+func eliminate_bot(team: int, attacker: int = -1) -> void:
+	if team <= 0 or not actors[team].active:
+		return
+	actors[team].active = false
+	actors[team].hide()
+	actors[team].trail.clear()
+	actors[team].velocity = Vector2.ZERO
+	brains[team].reset()
+	var before: float = territory.fractions[attacker] if attacker >= 0 else 0
+	if attacker >= 0 and actors[attacker].active:
+		territory.regions[attacker].append_array(territory.regions[team])
+		territory.regions[attacker] = IslandGeometry.merge_regions(territory.typed(territory.regions[attacker]))
+	territory.regions[team] = []
+	territory._update_fractions()
+	if attacker >= 0 and actors[attacker].active:
+		_captured(attacker, territory.fractions[attacker] - before, actors[attacker].position)

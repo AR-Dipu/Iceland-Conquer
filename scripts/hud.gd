@@ -1,5 +1,10 @@
 class_name GameHUD
 extends Control
+signal revive_requested
+signal cancel_ad_requested
+var revive_button: Button
+var cancel_button: Button
+var demo_remaining: float = 5
 signal pause_requested
 signal resume_requested
 signal restart_requested
@@ -10,6 +15,7 @@ var map: CountryMap
 var territory: TerritoryManager
 var actors: Array[ConquerCharacter] = []
 var camera: Camera2D
+var difficulty_name: String = "EASY"
 var mode: String = "selection"
 var winner: int = -1
 var fractions: Array[float] = [0, 0, 0]
@@ -50,6 +56,9 @@ func setup(settings: GameConfig) -> void:
 	resume_button = make_button("RESUME", Rect2(150, 656, 420, 64), func() -> void: resume_requested.emit())
 	replay_button = make_button("PLAY AGAIN", Rect2(150, 737, 420, 64), func() -> void: restart_requested.emit())
 	country_button = make_button("CHOOSE COUNTRY", Rect2(150, 818, 420, 64), func() -> void: choose_country_requested.emit())
+	revive_button = make_button("WATCH DEMO AD & REVIVE", Rect2(110, 807, 500, 70), func() -> void: revive_requested.emit())
+	revive_button.add_theme_font_size_override("font_size", 21)
+	cancel_button = make_button("CANCEL", Rect2(150, 787, 420, 64), func() -> void: cancel_ad_requested.emit())
 	set_mode("selection")
 
 func box(color: Color, edge: Color = Color(0.5, 0.9, 1, 0.4)) -> StyleBoxFlat:
@@ -94,13 +103,20 @@ func set_mode(value: String, winning_team: int = -1) -> void:
 	visible = value != "selection" and value != "loading"
 	mobile.enabled = value == "playing"
 	mobile.release()
-	blocker.visible = value == "paused" or value == "round_over"
+	blocker.visible = value in ["paused", "round_over", "defeated", "demo_ad"]
 	pause_button.visible = value == "playing"
 	resume_button.visible = value == "paused"
-	replay_button.visible = blocker.visible
-	country_button.visible = blocker.visible
+	revive_button.visible = value == "defeated"
+	cancel_button.visible = value == "demo_ad"
+	replay_button.text = "REPLAY" if value == "defeated" else "PLAY AGAIN"
+	country_button.text = "HOME" if value == "defeated" else "CHOOSE COUNTRY"
+	replay_button.visible = blocker.visible and value != "demo_ad"
+	country_button.visible = blocker.visible and value != "demo_ad"
 	replay_button.position.y = 737 if value == "paused" else 687
 	country_button.position.y = 818 if value == "paused" else 768
+	if value == "defeated":
+		replay_button.position.y = 647
+		country_button.position.y = 727
 	queue_redraw()
 
 func show_toast(value: String) -> void:
@@ -132,7 +148,7 @@ func _minimap() -> void:
 	text("ISLAND MAP", Vector2(609, 207), 12, Color("c9ecf0"), true)
 	var transform: Transform2D = minimap_transform()
 	draw_colored_polygon(transform * map.outline, Color("a9ce70"))
-	for team in 3:
+	for team in territory.regions.size():
 		for p in territory.regions[team]:
 			draw_colored_polygon(transform * p, config.team_colors[team])
 	if is_instance_valid(camera):
@@ -143,6 +159,8 @@ func _minimap() -> void:
 		if visual.has_area():
 			draw_rect(visual, Color(0.85, 1, 1, 0.55), false, 1.0)
 	for actor in actors:
+		if not actor.active:
+			continue
 		var point: Vector2 = transform * actor.position
 		draw_circle(point, 4.3 if actor.team == 0 else 3.5, Color.WHITE)
 		draw_circle(point, 3.1 if actor.team == 0 else 2.5, config.team_colors[actor.team])
@@ -154,15 +172,14 @@ func _draw() -> void:
 	draw_style_box(box(Color(0.015, 0.20, 0.31, 0.94)), Rect2(24, 24, 672, 141))
 	text(map.display_name.to_upper(), Vector2(44, 62), 27, Color("ffe5a0"))
 	text("YOUR TERRITORY", Vector2(44, 91), 13, Color("c6e8ed"))
-	text("%d%%" % roundi(fractions[0] * 100), Vector2(44, 136), 35, Color("e4ceff"))
+	text("%d%%" % floori(fractions[0] * 100), Vector2(44, 136), 35, Color("e4ceff"))
 	draw_style_box(box(Color("123b58"), Color.TRANSPARENT), Rect2(161, 111, 252, 15))
 	if fractions[0] > 0:
 		draw_style_box(box(Color("9b5cff"), Color.TRANSPARENT), Rect2(161, 111, 252 * minf(1, fractions[0] / config.win_fraction), 15))
-	text("60% TO WIN", Vector2(161, 147), 12, Color("ffe5a0"))
-	for team in [1, 2]:
-		var x: float = 484 + (team - 1) * 100
-		draw_circle(Vector2(x, 105), 5, config.team_colors[team])
-		text("%d%%" % roundi(fractions[team] * 100), Vector2(x, 140), 23, Color.WHITE, true)
+	text("100% TO WIN", Vector2(161, 147), 12, Color("ffe5a0"))
+	var remaining: int = actors.filter(func(a: ConquerCharacter) -> bool: return a.team > 0 and a.active).size()
+	text(difficulty_name, Vector2(476,105),16)
+	text("%d BOTS LEFT" % remaining, Vector2(476,140),16)
 	_minimap()
 	draw_style_box(box(Color(0.015, 0.20, 0.31, 0.82)), Rect2(65, 1165, 590, 66))
 	text("TOUCH AND HOLD TO MOVE", Vector2(360, 1191), 17, Color("e3d0ff"), true)
@@ -170,13 +187,17 @@ func _draw() -> void:
 	if toast_life > 0 and mode == "playing":
 		draw_style_box(box(Color(0.02, 0.20, 0.31, 0.94)), Rect2(95, 1050, 530, 55))
 		text(toast, Vector2(360, 1085), 20, Color("ffe6a1"), true)
-	if mode == "paused" or mode == "round_over":
+	if mode in ["paused", "round_over", "defeated", "demo_ad"]:
 		draw_rect(Rect2(-1000, -1600, 3000, 4500), Color(0.01, 0.08, 0.16, 0.78))
 		draw_style_box(box(Color("123f5d")), Rect2(95, 413, 530, 510))
 		text(map.display_name.to_upper(), Vector2(360, 462), 19, Color("b3e7e2"), true)
 		var title: String = "ISLAND TIME"
 		if mode == "round_over":
 			title = "COUNTRY CONQUERED!" if winner == 0 else "A RIVAL RULES!"
+		if mode == "defeated":
+			title = "Your tail was cut!"
+		elif mode == "demo_ad":
+			title = "Demo rewarded ad"
 		text(title, Vector2(360, 525), 31, Color("ffe5a0"), true)
 		text("Your purple territory: %d%%" % roundi(fractions[0] * 100), Vector2(360, 574), 23, Color("dcc4ff"), true)
-		text("A little pause before your next adventure.", Vector2(360, 613), 17, Color("c8e6eb"), true)
+		text("No real ad is shown. %d seconds left" % ceili(demo_remaining) if mode == "demo_ad" else "Choose your next adventure.", Vector2(360, 613), 17, Color("c8e6eb"), true)

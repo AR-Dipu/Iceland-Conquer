@@ -1,6 +1,7 @@
 class_name CountrySelector
 extends Control
 signal country_selected(country_id: String)
+signal difficulty_changed(value: int)
 signal play_requested
 var catalog: CountryCatalog
 var selected: CountryMap
@@ -30,6 +31,10 @@ func setup(data: CountryCatalog, typeface: FontVariation) -> void:
 	play_button.add_theme_font_size_override("font_size", 34)
 	play_button.add_theme_stylebox_override("normal", box(Color("9555ef"), Color("d9baff")))
 	play_button.add_theme_stylebox_override("hover", box(Color("ad76ff"), Color.WHITE))
+	for i in 3:
+		var value: int = i
+		var button := make_button(["EASY / 3 BOTS","MEDIUM / 5 BOTS","HARD / 7 BOTS"][i], Rect2(28+i*226,1081,212,38), func() -> void: difficulty_changed.emit(value))
+		button.add_theme_font_size_override("font_size",15)
 	select(selected.country_id)
 
 func box(color: Color, edge: Color = Color("438ba0")) -> StyleBoxFlat:
@@ -121,7 +126,7 @@ func _draw() -> void:
 	text("YOUR NEXT CONQUEST", Vector2(263, 935), 14, Color("c8a9ff"))
 	text("Honshu + offshore scenery" if selected.country_id == "jpn" else "A country-shaped tropical island", Vector2(263, 974), 17)
 	text("Bigger world. Smooth camera.", Vector2(263, 1005), 17, Color("c5f1ef"))
-	text("Purple is you. Reach 60% to win.", Vector2(263, 1036), 17, Color("dac7ff"))
+	text("Purple is you. Reach 100% to win.", Vector2(263, 1036), 17, Color("dac7ff"))
 	if not message.is_empty():
 		text(message, Vector2(360, 1108), 23, Color("ffe4a0"), true)
-	text("TOUCH AND HOLD TO MOVE  /  RELEASE TO STOP", Vector2(360, 1250), 15, Color("c5f3f2"), true)
+	text("TOUCH ANYWHERE, DRAG TO STEER  /  RELEASE TO STOP", Vector2(360, 1250), 15, Color("c5f3f2"), true)

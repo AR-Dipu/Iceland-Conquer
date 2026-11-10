@@ -17,6 +17,7 @@ func setup(settings: GameConfig, country: CountryMap) -> void:
 	island = country.outline
 	island_area = IslandGeometry.area(island)
 	initial = country.initial_territories.duplicate(true)
+	fractions.resize(initial.size())
 	reset_all()
 
 func typed(polys: Array) -> Array[PackedVector2Array]:
@@ -40,7 +41,7 @@ func region_at(team: int, point: Vector2) -> PackedVector2Array:
 	return PackedVector2Array()
 
 func _remove_from_others(team: int, polygon: PackedVector2Array) -> void:
-	for other in 3:
+	for other in regions.size():
 		if other == team:
 			continue
 		var remaining: Array[PackedVector2Array] = []
@@ -68,11 +69,7 @@ func capture(team: int, trail: PackedVector2Array, departure: PackedVector2Array
 			regions[team].append(p)
 			flashes.append({"polygon": p, "life": 0.65, "team": team})
 	regions[team] = IslandGeometry.merge_regions(typed(regions[team]))
-	if regions[team].size() == 1:
-		var rounded: PackedVector2Array = IslandGeometry.soften(regions[team][0])
-		regions[team] = Geometry2D.intersect_polygons(rounded, island)
-		for p in regions[team]:
-			_remove_from_others(team, p)
+
 	_update_fractions()
 	if fractions[team] > before + 0.0001:
 		captured.emit(team, fractions[team] - before, trail[-1])
@@ -86,7 +83,7 @@ func reset_team(team: int) -> void:
 	_update_fractions()
 
 func _update_fractions() -> void:
-	for team in 3:
+	for team in regions.size():
 		var total: float = 0.0
 		for p in regions[team]:
 			total += IslandGeometry.area(p)
@@ -105,7 +102,7 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	if config == null:
 		return
-	for team in 3:
+	for team in regions.size():
 		var color: Color = config.team_colors[team]
 		for p in regions[team]:
 			if p.size() >= 3:
