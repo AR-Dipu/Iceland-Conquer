@@ -1,0 +1,57 @@
+# Godot generated files
+/.godot/
+/.mono/
+
+# Android emulator files
+/tools/avds/
+
+# Generated builds
+/builds/
+*.apk
+*.aab
+
+# Android and signing credentials
+*.keystore
+*.jks
+*.p12
+*.pfx
+
+# Temporary files
+*.log
+*.tmp
+*.bak
+
+# Environment secrets
+.env
+.env.*
+
+# IDE files
+.vs/
+.vscode/
+*.user
+
+# Operating system
+Thumbs.db
+.DS_Store
+
+# Downloaded Godot editor and tools
+/tools/godot/
+/tools/godot.zip
+/tools/export_templates.tpz
+/tools/prototype-0.1.0-source-backup.zip
+
+# Godot generated files
+/.godot/
+
+# Android emulator
+/tools/avds/
+
+# Generated builds
+/builds/
+*.apk
+*.aab
+
+# Temporary files
+*.log
+*.tmp
+*.bak
