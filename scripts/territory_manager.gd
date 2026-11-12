@@ -54,7 +54,9 @@ func capture(team: int, trail: PackedVector2Array, departure: PackedVector2Array
 	if enclosure.is_empty():
 		return false
 	var before: float = fractions[team]
-	var additions: Array[PackedVector2Array] = Geometry2D.intersect_polygons(enclosure, island)
+	var additions: Array[PackedVector2Array] = []
+	for face in IslandGeometry.split_faces(enclosure):
+		additions.append_array(Geometry2D.intersect_polygons(face, island))
 	for addition in additions:
 		# New pieces are cut against existing ownership before union, so even
 		# captures that create a hole remain disjoint and area is never doubled.

@@ -8,7 +8,7 @@ var active: bool = false
 var foreground: bool = true
 func begin() -> int:
 	token += 1
-	remaining = 5.0
+	remaining = 3.0
 	active = true
 	return token
 func cancel() -> void:

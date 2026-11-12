@@ -1,10 +1,35 @@
 class_name GameHUD
 extends Control
+signal coin_revive_requested
+signal bonus_requested
+var coin_balance: int = 0
+var coin_price: int = 100
+var wallet_ready: bool = false
+var bonus_ready: bool = false
+var player_names: Array[String] = []
+
+func actor_name(team: int) -> String:
+	return player_names[team] if team >= 0 and team < player_names.size() else "Captain"
+
+func display_percent(team: int) -> int:
+	if mode == "round_over" and winner == team: return 100
+	return mini(99,floori(fractions[team]*100))
+var coin_button: Button
+var bonus_button: Button
+var popup_tween: Tween
+var click_audio: AudioStreamPlayer
+
+func refresh_economy() -> void:
+	if coin_button == null: return
+	coin_button.text = "RESUME WITH COINS — %d" % coin_price
+	coin_button.disabled = not wallet_ready or coin_balance < coin_price
+	bonus_button.visible = mode == "round_over" and winner == 0 and bonus_ready
+	queue_redraw()
 signal revive_requested
 signal cancel_ad_requested
 var revive_button: Button
 var cancel_button: Button
-var demo_remaining: float = 5
+var demo_remaining: float = 3
 signal pause_requested
 signal resume_requested
 signal restart_requested
@@ -31,6 +56,18 @@ var redraw_clock: float = 0
 
 func setup(settings: GameConfig) -> void:
 	config = settings
+	click_audio = AudioStreamPlayer.new()
+	var tone := AudioStreamWAV.new()
+	tone.format = AudioStreamWAV.FORMAT_8_BITS
+	tone.mix_rate = 22050
+	var samples := PackedByteArray()
+	for i in 1323:
+		var t: float = float(i)/22050
+		samples.append(clampi(roundi(128 + sin(t*TAU*660)*32*(1-float(i)/1323)),0,255))
+	tone.data = samples
+	click_audio.stream = tone
+	click_audio.volume_db = -14
+	add_child(click_audio)
 	font.base_font = preload("res://assets/fonts/Fredoka.ttf")
 	font.variation_opentype = {"wght": 600.0, "wdth": 100.0}
 	font.variation_embolden = 0.6
@@ -59,6 +96,10 @@ func setup(settings: GameConfig) -> void:
 	revive_button = make_button("WATCH DEMO AD & REVIVE", Rect2(110, 807, 500, 70), func() -> void: revive_requested.emit())
 	revive_button.add_theme_font_size_override("font_size", 21)
 	cancel_button = make_button("CANCEL", Rect2(150, 787, 420, 64), func() -> void: cancel_ad_requested.emit())
+	coin_button = make_button("RESUME WITH COINS", Rect2(110, 717, 500, 62), func() -> void: coin_revive_requested.emit())
+	coin_button.add_theme_font_size_override("font_size", 21)
+	bonus_button = make_button("DEMO AD: 250 COINS TOTAL", Rect2(110, 859, 500, 55), func() -> void: bonus_requested.emit())
+	bonus_button.add_theme_font_size_override("font_size", 20)
 	set_mode("selection")
 
 func box(color: Color, edge: Color = Color(0.5, 0.9, 1, 0.4)) -> StyleBoxFlat:
@@ -83,6 +124,7 @@ func make_button(label: String, rect: Rect2, action: Callable) -> Button:
 	button.add_theme_stylebox_override("hover", box(Color("8050cf")))
 	button.add_theme_stylebox_override("pressed", box(Color("523185")))
 	button.pressed.connect(action)
+	button.pressed.connect(func() -> void: click_audio.play())
 	add_child(button)
 	return button
 
@@ -98,6 +140,11 @@ func update_scores(values: Array[float]) -> void:
 	queue_redraw()
 
 func set_mode(value: String, winning_team: int = -1) -> void:
+	if popup_tween != null: popup_tween.kill()
+	modulate.a = 0.3 if value in ["defeated","round_over","paused"] else 1.0
+	if modulate.a < 1:
+		popup_tween = create_tween()
+		popup_tween.tween_property(self,"modulate:a",1.0,0.22).set_trans(Tween.TRANS_SINE)
 	mode = value
 	winner = winning_team
 	visible = value != "selection" and value != "loading"
@@ -115,8 +162,12 @@ func set_mode(value: String, winning_team: int = -1) -> void:
 	replay_button.position.y = 737 if value == "paused" else 687
 	country_button.position.y = 818 if value == "paused" else 768
 	if value == "defeated":
-		replay_button.position.y = 647
-		country_button.position.y = 727
+		revive_button.position.y = 637
+		replay_button.position.y = 797
+		replay_button.text = "RESTART FOR FREE"
+		country_button.position.y = 877
+	coin_button.visible = value == "defeated"
+	refresh_economy()
 	queue_redraw()
 
 func show_toast(value: String) -> void:
@@ -164,40 +215,41 @@ func _minimap() -> void:
 		var point: Vector2 = transform * actor.position
 		draw_circle(point, 4.3 if actor.team == 0 else 3.5, Color.WHITE)
 		draw_circle(point, 3.1 if actor.team == 0 else 2.5, config.team_colors[actor.team])
-	text("YOU ARE PURPLE", Vector2(609, 391), 11, Color("dcc2ff"), true)
+	text(actor_name(0), Vector2(609, 391), 11, Color("dcc2ff"), true)
 
 func _draw() -> void:
 	if config == null or map == null or not is_instance_valid(territory):
 		return
 	draw_style_box(box(Color(0.015, 0.20, 0.31, 0.94)), Rect2(24, 24, 672, 141))
 	text(map.display_name.to_upper(), Vector2(44, 62), 27, Color("ffe5a0"))
-	text("YOUR TERRITORY", Vector2(44, 91), 13, Color("c6e8ed"))
-	text("%d%%" % floori(fractions[0] * 100), Vector2(44, 136), 35, Color("e4ceff"))
+	text(actor_name(0).to_upper(), Vector2(44, 91), 13, Color("c6e8ed"))
+	text("%d%%" % display_percent(0), Vector2(44, 136), 35, Color("e4ceff"))
 	draw_style_box(box(Color("123b58"), Color.TRANSPARENT), Rect2(161, 111, 252, 15))
 	if fractions[0] > 0:
 		draw_style_box(box(Color("9b5cff"), Color.TRANSPARENT), Rect2(161, 111, 252 * minf(1, fractions[0] / config.win_fraction), 15))
 	text("100% TO WIN", Vector2(161, 147), 12, Color("ffe5a0"))
 	var remaining: int = actors.filter(func(a: ConquerCharacter) -> bool: return a.team > 0 and a.active).size()
 	text(difficulty_name, Vector2(476,105),16)
-	text("%d BOTS LEFT" % remaining, Vector2(476,140),16)
+	text("%d RIVALS LEFT" % remaining, Vector2(476,140),16)
 	_minimap()
 	draw_style_box(box(Color(0.015, 0.20, 0.31, 0.82)), Rect2(65, 1165, 590, 66))
 	text("TOUCH AND HOLD TO MOVE", Vector2(360, 1191), 17, Color("e3d0ff"), true)
-	text("Release to stop. Return to purple to claim land.", Vector2(360, 1216), 15, Color("d4f0f0"), true)
+	text("Release to stop. Return to your land to claim area.", Vector2(360, 1216), 15, Color("d4f0f0"), true)
 	if toast_life > 0 and mode == "playing":
 		draw_style_box(box(Color(0.02, 0.20, 0.31, 0.94)), Rect2(95, 1050, 530, 55))
 		text(toast, Vector2(360, 1085), 20, Color("ffe6a1"), true)
 	if mode in ["paused", "round_over", "defeated", "demo_ad"]:
 		draw_rect(Rect2(-1000, -1600, 3000, 4500), Color(0.01, 0.08, 0.16, 0.78))
-		draw_style_box(box(Color("123f5d")), Rect2(95, 413, 530, 510))
+		draw_style_box(box(Color("123f5d")), Rect2(95, 413, 530, 550))
+		if toast_life > 0: text(toast.left(54),Vector2(360,952),14,Color("ffe4a0"),true)
 		text(map.display_name.to_upper(), Vector2(360, 462), 19, Color("b3e7e2"), true)
 		var title: String = "ISLAND TIME"
 		if mode == "round_over":
-			title = "COUNTRY CONQUERED!" if winner == 0 else "A RIVAL RULES!"
+			title = actor_name(winner) + " WINS!"
 		if mode == "defeated":
 			title = "Your tail was cut!"
 		elif mode == "demo_ad":
 			title = "Demo rewarded ad"
 		text(title, Vector2(360, 525), 31, Color("ffe5a0"), true)
-		text("Your purple territory: %d%%" % roundi(fractions[0] * 100), Vector2(360, 574), 23, Color("dcc4ff"), true)
+		text("COINS: %d  |  %s: %d%%" % [coin_balance, actor_name(winner if mode == "round_over" else 0), display_percent(winner if mode == "round_over" else 0)], Vector2(360, 574), 20, Color("dcc4ff"), true)
 		text("No real ad is shown. %d seconds left" % ceili(demo_remaining) if mode == "demo_ad" else "Choose your next adventure.", Vector2(360, 613), 17, Color("c8e6eb"), true)

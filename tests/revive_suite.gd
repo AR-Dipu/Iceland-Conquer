@@ -8,6 +8,7 @@ func _initialize() -> void:
 	run.call_deferred()
 func run() -> void:
 	var game = load("res://scenes/main.tscn").instantiate()
+	game.profile_path = "user://test_" + Crypto.new().generate_random_bytes(8).hex_encode()
 	root.add_child(game)
 	await process_frame
 	game.set_physics_process(false)
@@ -29,15 +30,16 @@ func run() -> void:
 	verify(input.movement(Vector2.ZERO, game.island).x > 0.99, "Drag steers from touch origin")
 	input.release()
 	verify(not input.has_target, "Release clears steering")
-	game.territory.fractions[0] = 0.999
+	game.territory.fractions[0] = 0.989
 	game._captured(0, 0.01, Vector2.ZERO)
-	verify(game.running, "No early victory at 99.9 percent")
+	verify(game.running, "No early victory below 99 percent")
 	game.territory.regions[0] = [game.island]
 	game.territory.regions[1] = []
 	game.territory.regions[2] = []
 	game.territory._update_fractions()
 	game._captured(0, 0.001, Vector2.ZERO)
 	verify(game.state == game.State.ROUND_OVER, "Full ownership wins")
+	game.campaign.conquered.clear()
 	game.start_round()
 	var before: Array[float] = game.territory.fractions.duplicate()
 	game._set_state(game.State.DEFEATED)
@@ -49,7 +51,7 @@ func run() -> void:
 	game.begin_revive()
 	game.reward.foreground = false
 	game.reward._process(1)
-	verify(game.reward.remaining == 5, "Background time grants no reward")
+	verify(game.reward.remaining == 3, "Background time grants no reward")
 	game.reward.foreground = true
 	for tick in 51:
 		game.reward._process(0.1)

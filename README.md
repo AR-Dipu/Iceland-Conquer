@@ -1,4 +1,8 @@
-# Island Conquer 0.1.2
+# Island Conquer 0.1.5
+
+World campaign: 176 offline country/territory maps, continent filters, search, map zoom, neighbor conquest and fixed sea routes. Choose a starting country, save your name, and expand your frontier. All characters start with small territory dots and can cross their own trails safely. Anyone wins at 99% actual ownership, shown as 100%. Demo ads now take three foreground seconds. See docs/UPDATE-0.1.5.md and assets/maps/world-routes.json.
+
+Persistent offline coins and demo rewards: start with 100 coins; first country completion earns 25, or 250 total after the optional five-second demo. Coin revival costs 100/150/200 per match. Restart is always free. See docs/UPDATE-0.1.4.md and tests/economy_suite.gd.
 
 Open Launch Game.cmd to play or Open Editor.cmd to edit. Android APK: builds/android/island-conquer-debug.apk.
 

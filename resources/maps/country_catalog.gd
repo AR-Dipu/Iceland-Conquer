@@ -11,11 +11,15 @@ func _init() -> void:
 		var map := CountryMap.new()
 		map.country_id = entry.id
 		map.display_name = entry.name
+		map.continent = entry.get("continent", "Asia")
+		map.map_rings = entry.get("map_rings", [])
+		map.neighbors = entry.get("neighbors", [])
+		map.sea_neighbors = entry.get("sea_neighbors", [])
+		map.longitude = entry.get("longitude", 0)
+		map.latitude = entry.get("latitude", 0)
 		map.outline = polygon(entry.outline)
 		for ring in entry.decorative_islands:
 			map.decorative_islands.append(polygon(ring))
-		map.build()
-		assert(map.valid(), "Invalid bundled country map: " + map.country_id)
 		maps.append(map)
 
 static func polygon(points: Array) -> PackedVector2Array:

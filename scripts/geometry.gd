@@ -104,12 +104,42 @@ static func boundary_capture(poly: PackedVector2Array, trail: PackedVector2Array
 			while index != stop:
 				candidate.append(poly[index])
 				index = (index - 1 + poly.size()) % poly.size()
-		if simple(candidate):
+		if not split_faces(candidate).is_empty():
 			candidates.append(candidate)
 	if candidates.is_empty():
 		return PackedVector2Array()
-	candidates.sort_custom(func(a: PackedVector2Array, b: PackedVector2Array) -> bool: return area(a) < area(b))
+	candidates.sort_custom(func(a: PackedVector2Array, b: PackedVector2Array) -> bool: return face_area(a) < face_area(b))
 	return candidates[0]
+
+static func face_area(poly: PackedVector2Array) -> float:
+	var total: float = 0
+	for face in split_faces(poly): total += area(face)
+	return total
+
+static func split_faces(poly: PackedVector2Array, depth: int = 0) -> Array[PackedVector2Array]:
+	if depth > 64 or poly.size() < 3: return []
+	for i in poly.size():
+		for j in range(i+2,poly.size()):
+			if i == 0 and j == poly.size()-1: continue
+			var hit: Variant = Geometry2D.segment_intersects_segment(poly[i],poly[(i+1)%poly.size()],poly[j],poly[(j+1)%poly.size()])
+			if hit == null: continue
+			var first := PackedVector2Array([hit])
+			for k in range(i+1,j+1):
+				if first[-1].distance_to(poly[k]) > 0.01: first.append(poly[k])
+			var second := PackedVector2Array([hit])
+			for k in range(j+1,poly.size()):
+				if second[-1].distance_to(poly[k]) > 0.01: second.append(poly[k])
+			for k in range(i+1):
+				if second[-1].distance_to(poly[k]) > 0.01: second.append(poly[k])
+			if first.size() > 1 and first[0].distance_to(first[-1]) < 0.01: first.remove_at(first.size()-1)
+			if second.size() > 1 and second[0].distance_to(second[-1]) < 0.01: second.remove_at(second.size()-1)
+			var result := split_faces(first,depth+1)
+			result.append_array(split_faces(second,depth+1))
+			return result
+	if not simple(poly): return []
+	var result := poly.duplicate()
+	if Geometry2D.is_polygon_clockwise(result): result.reverse()
+	return [result]
 
 static func segment_distance(a: Vector2, b: Vector2, c: Vector2, d: Vector2) -> float:
 	if Geometry2D.segment_intersects_segment(a, b, c, d) != null:

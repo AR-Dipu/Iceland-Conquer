@@ -14,11 +14,27 @@ var center := Vector2.ZERO
 var home_radius: float = 200.0
 var navigation := AStar2D.new()
 var triangles: Array[PackedVector2Array] = []
+var built: bool = false
+var continent: String = ""
+var map_rings: Array = []
+var neighbors: Array = []
+var sea_neighbors: Array = []
+var longitude: float = 0
+var latitude: float = 0
 
 func build() -> void:
+	if built: return
+	built = true
 	if Geometry2D.is_polygon_clockwise(outline):
 		outline.reverse()
 	outline = IslandGeometry.soften(outline, 17.0)
+	if not IslandGeometry.simple(outline):
+		var repaired: Array[PackedVector2Array] = Geometry2D.merge_polygons(outline,outline)
+		repaired.sort_custom(func(a: PackedVector2Array,b: PackedVector2Array) -> bool: return IslandGeometry.area(a) > IslandGeometry.area(b))
+		for piece in repaired:
+			if IslandGeometry.simple(piece):
+				outline = piece
+				break
 	land_bounds = IslandGeometry.bounds(outline)
 	# Re-normalize after corner softening so each country is 2,400 units long.
 	var factor: float = 2400.0 / maxf(land_bounds.size.x, land_bounds.size.y)
@@ -60,10 +76,15 @@ func _build_homes(count: int = 3) -> void:
 	for y in range(40, ceili(land_bounds.size.y), 65):
 		for x in range(40, ceili(land_bounds.size.x), 65):
 			var p := Vector2(x, y)
-			if Geometry2D.is_point_in_polygon(p, outline) and p.distance_to(IslandGeometry.nearest(outline, p).point) > 65:
+			if _safe_spawn(p) and p.distance_to(IslandGeometry.nearest(outline, p).point) > 65:
 				candidates.append(p)
-	if candidates.is_empty():
-		candidates.append(center)
+	if candidates.size() < count * 3:
+		for y in range(10,ceili(land_bounds.size.y),15):
+			for x in range(10,ceili(land_bounds.size.x),15):
+				var p := Vector2(x,y)
+				if _safe_spawn(p) and p.distance_to(IslandGeometry.nearest(outline,p).point) > 8:
+					candidates.append(p)
+	if candidates.is_empty(): candidates.append(center)
 	var preferred: Vector2 = land_bounds.position + land_bounds.size * Vector2(randf_range(0.25,0.75),randf_range(0.25,0.75))
 	for team in count:
 		var best: float = -INF
@@ -84,11 +105,20 @@ func _build_homes(count: int = 3) -> void:
 	for i in count:
 		for j in range(i + 1, count):
 			separation = minf(separation, spawn_points[i].distance_to(spawn_points[j]))
-	home_radius = minf(sqrt(IslandGeometry.area(outline) * 0.10 / PI), separation * 0.37)
+	home_radius = minf(45.0, separation * 0.30)
 	for team in count:
-		var radius: float = home_radius * (1.1 if team == 0 else 0.95)
+		var radius: float = minf(home_radius,spawn_points[team].distance_to(IslandGeometry.nearest(outline,spawn_points[team]).point)*0.8)
 		var patch := IslandGeometry.blob(spawn_points[team], Vector2.ONE * radius, team * 1.3, 80)
-		initial_territories[team] = Geometry2D.intersect_polygons(patch, outline)
+		var contained: bool = true
+		for vertex in patch:
+			if not Geometry2D.is_point_in_polygon(vertex,outline): contained = false
+		initial_territories[team] = [patch] if contained else Geometry2D.intersect_polygons(patch, outline)
+
+func _safe_spawn(point: Vector2) -> bool:
+	# Avoid exact scan-line/vertex coincidences being classified as land.
+	for offset in [Vector2.ZERO,Vector2(2,0),Vector2(-2,0),Vector2(0,2),Vector2(0,-2)]:
+		if not Geometry2D.is_point_in_polygon(point+offset,outline): return false
+	return true
 
 func _build_scenery() -> void:
 	var random := RandomNumberGenerator.new()
@@ -101,7 +131,7 @@ func _build_scenery() -> void:
 			continue
 		var near_spawn: bool = false
 		for spawn in spawn_points:
-			near_spawn = near_spawn or p.distance_to(spawn) < 95
+			near_spawn = near_spawn or p.distance_to(spawn) < 145
 		if near_spawn or p.distance_to(IslandGeometry.nearest(outline, p).point) < 28:
 			continue
 		var near_prop: bool = false
@@ -139,6 +169,7 @@ func route(start: Vector2, target: Vector2) -> PackedVector2Array:
 	return result
 
 func valid() -> bool:
+	if not built: build()
 	if not IslandGeometry.simple(outline) or spawn_points.size() < 3:
 		return false
 	for team in spawn_points.size():

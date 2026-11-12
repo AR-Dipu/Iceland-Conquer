@@ -25,8 +25,8 @@ func setup(index: int, settings: GameConfig) -> void:
 	var texture := AtlasTexture.new()
 	texture.atlas = atlas
 	var cell: float = float(atlas.get_width()) / 4.0
-	var index: int = config.cat_indices[team]
-	texture.region = Rect2(Vector2(index % 4 * cell, index / 4 * atlas.get_height() / 2), Vector2(cell, atlas.get_height() / 2))
+	var cat_index: int = config.cat_indices[team]
+	texture.region = Rect2(Vector2(cat_index % 4 * cell, cat_index / 4 * atlas.get_height() / 2), Vector2(cell, atlas.get_height() / 2))
 	sprite.texture = texture
 	sprite.scale = Vector2.ONE * (94.0 / float(sprite.texture.get_width()))
 	sprite.position.y = -34.0

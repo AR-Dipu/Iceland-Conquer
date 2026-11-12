@@ -21,6 +21,17 @@ func hits(a: Vector2, b: Vector2, radius: float, skip_tail: int = 0) -> bool:
 			return true
 	return false
 
+func self_hit_fraction(a: Vector2, b: Vector2) -> float:
+	var earliest: float = INF
+	var length: float = a.distance_to(b)
+	if length < 0.001:
+		return earliest
+	for i in maxi(0, points.size() - 2):
+		var hit: Variant = Geometry2D.segment_intersects_segment(a, b, points[i], points[i + 1])
+		if hit != null and a.distance_to(hit) > 0.01:
+			earliest = minf(earliest, a.distance_to(hit) / length)
+	return earliest
+
 func _process(delta: float) -> void:
 	if not points.is_empty():
 		age += delta
