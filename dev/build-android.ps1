@@ -38,6 +38,11 @@ foreach ($name in $values.Keys) {
 }
 Set-Content -LiteralPath $settingsPath -Value $settings -Encoding utf8
 New-Item -ItemType Directory -Force -Path (Join-Path $projectRoot 'builds/android') | Out-Null
-& $enginePath --headless --path $projectRoot --export-debug Android (Join-Path $projectRoot 'builds/android/island-conquer-debug.apk')
+$preset = Get-Content -LiteralPath (Join-Path $projectRoot 'export_presets.cfg') -Raw
+$versionMatch = [regex]::Match($preset, '(?m)^version/name="([0-9.]+)"')
+if (!$versionMatch.Success) { throw 'Missing Android export version.' }
+$apkName = 'country-conquer-v' + $versionMatch.Groups[1].Value + '.apk'
+$apkPath = Join-Path $projectRoot ('builds/android/' + $apkName)
+& $enginePath --headless --path $projectRoot --export-debug Android $apkPath
 if ($LASTEXITCODE -ne 0) { throw 'Android export failed.' }
-Write-Host 'APK: builds/android/island-conquer-debug.apk'
+Write-Host ('APK: ' + $apkPath)

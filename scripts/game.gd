@@ -19,7 +19,7 @@ var hud: GameHUD
 var selector: WorldCampaignSelector
 var ui_root: Control
 var actors: Array[ConquerCharacter] = []
-var brains: Array[BotBrain] = []
+var brains: Array[RefCounted] = []
 var home_points: Array[Vector2] = []
 var home_regions: Array[PackedVector2Array] = []
 var island := PackedVector2Array()
@@ -287,6 +287,7 @@ func _physics_process(delta: float) -> void:
 		_capture_preview.call_deferred()
 	if state != State.PLAYING:
 		return
+	territory.begin_planning_frame()
 	arrival_elapsed += delta
 	if arrival_elapsed >= 30:
 		arrival_elapsed = fmod(arrival_elapsed,30)
@@ -449,10 +450,9 @@ func _update_trail_segment(actor: ConquerCharacter) -> void:
 	var b := actor.position
 	if a.distance_to(b) < 0.0001: return
 	var cuts: Array[float] = [0,1]
-	for polygon in territory.regions[actor.team]:
-		for i in polygon.size():
-			var hit: Variant = Geometry2D.segment_intersects_segment(a,b,polygon[i],polygon[(i+1)%polygon.size()])
-			if hit != null: cuts.append(clampf(a.distance_to(hit)/a.distance_to(b),0,1))
+	for edge in territory.boundary_segments(actor.team,a,b):
+		var hit: Variant = Geometry2D.segment_intersects_segment(a,b,edge[0],edge[1])
+		if hit != null: cuts.append(clampf(a.distance_to(hit)/a.distance_to(b),0,1))
 	cuts.sort()
 	for i in cuts.size()-1:
 		if cuts[i+1]-cuts[i] < 0.00001: continue
@@ -462,7 +462,10 @@ func _update_trail_segment(actor: ConquerCharacter) -> void:
 		if territory.owned(actor.team,midpoint):
 			if actor.trail.points.size() >= 2:
 				actor.trail.append_point(start)
-				territory.capture(actor.team,actor.trail.points,actor.trail.departure)
+				var before: float = territory.fractions[actor.team]
+				var claimed := territory.capture(actor.team,actor.trail.points,actor.trail.departure)
+				if claimed and actor.team > 0 and brains[actor.team].has_method("note_capture"):
+					brains[actor.team].note_capture(territory.fractions[actor.team]-before,territory)
 				if actor.team == 0 and not territory.last_capture_error.is_empty(): hud.show_toast(territory.last_capture_error)
 				actor.trail.clear()
 				if state != State.PLAYING: return
@@ -673,6 +676,7 @@ func _revive_player() -> void:
 
 func _revival_land() -> Array:
 	if not territory.regions[0].is_empty(): return territory.regions[0]
+	var errors_before: int = IslandGeometry.subtraction_errors
 	var neutral: Array = [island]
 	for team in range(1, territory.regions.size()):
 		for owned_piece in territory.regions[team]:
@@ -680,6 +684,9 @@ func _revival_land() -> Array:
 			for piece in neutral:
 				remainder.append_array(IslandGeometry.subtract(piece, owned_piece))
 			neutral = remainder
+	if IslandGeometry.subtraction_errors != errors_before:
+		hud.show_toast("Safe land could not be resolved. Restart for free.")
+		return []
 	for piece in neutral:
 		if IslandGeometry.area(piece) < 100: continue
 		var point: Vector2 = IslandGeometry.interior_point(piece)

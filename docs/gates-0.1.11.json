@@ -1,0 +1,54 @@
+{
+  "simulations": 30,
+  "baseline_net_median": 0.336005368322952,
+  "new_net_median": 0.500377597043547,
+  "net_gain_improvement_percent": 48.91952457218136,
+  "baseline_reverse_median": 1987.09943453968,
+  "new_reverse_median": 0.0,
+  "reverse_reduction_percent": 100.0,
+  "summed_reverse_reduction_percent": 99.22767563135416,
+  "land_gain_gate": true,
+  "reverse_gate": true,
+  "country_gate": true,
+  "cpu_p95_reduction_percent": 78.70848708487085,
+  "cpu_gate": true,
+  "natural_bot_wins_before": 0,
+  "natural_bot_wins_after": 0,
+  "countries": [
+    {
+      "country": "bgd",
+      "baseline_net_median": 0.279748313887095,
+      "new_net_median": 0.479946937378925,
+      "improvement_percent": 71.56383561712161,
+      "no_regression": true
+    },
+    {
+      "country": "ind",
+      "baseline_net_median": 0.393081564487764,
+      "new_net_median": 0.573416758078417,
+      "improvement_percent": 45.877296185501095,
+      "no_regression": true
+    },
+    {
+      "country": "lka",
+      "baseline_net_median": 0.383665015094327,
+      "new_net_median": 0.563049981253589,
+      "improvement_percent": 46.755622509693474,
+      "no_regression": true
+    },
+    {
+      "country": "jpn",
+      "baseline_net_median": 0.286106477579036,
+      "new_net_median": 0.588058450224475,
+      "improvement_percent": 105.5383209777296,
+      "no_regression": true
+    },
+    {
+      "country": "isl",
+      "baseline_net_median": 0.368708955869448,
+      "new_net_median": 0.45741929641372,
+      "improvement_percent": 24.05971949747876,
+      "no_regression": true
+    }
+  ]
+}

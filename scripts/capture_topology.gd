@@ -12,9 +12,27 @@ static func enclosed(owned: Array, trail: PackedVector2Array) -> Dictionary:
 	for i in trail.size()-1:
 		if trail[i].distance_to(trail[i+1]) > 0.002: segments.append({"a":trail[i],"b":trail[i+1],"trail":true,"cuts":[0.0,1.0]})
 	if segments.size() > 6000: return {"ok":false,"faces":[]}
+	# Broad phase: compare only segments sharing a spatial bucket. Keep sorted
+	# pair order so topology and collinear endpoint handling remain deterministic.
+	var buckets: Dictionary = {}
+	var candidates: Array = []
+	for i in segments.size():
+		var s: Dictionary = segments[i]
+		var lo := Vector2i(floori((minf(s.a.x,s.b.x)-0.001)/128),floori((minf(s.a.y,s.b.y)-0.001)/128))
+		var hi := Vector2i(floori((maxf(s.a.x,s.b.x)+0.001)/128),floori((maxf(s.a.y,s.b.y)+0.001)/128))
+		var peers: Dictionary = {}
+		for x in range(lo.x,hi.x+1):
+			for y in range(lo.y,hi.y+1):
+				var key := Vector2i(x,y)
+				for j in buckets.get(key,[]): peers[j] = true
+				if not buckets.has(key): buckets[key] = []
+				buckets[key].append(i)
+		var ordered: Array = peers.keys()
+		ordered.sort()
+		candidates.append(ordered)
 	for i in segments.size():
 		var a: Dictionary = segments[i]
-		for j in range(i+1,segments.size()):
+		for j in candidates[i]:
 			var b: Dictionary = segments[j]
 			if maxf(a.a.x,a.b.x)+0.001 < minf(b.a.x,b.b.x) or maxf(b.a.x,b.b.x)+0.001 < minf(a.a.x,a.b.x) or maxf(a.a.y,a.b.y)+0.001 < minf(b.a.y,b.b.y) or maxf(b.a.y,b.b.y)+0.001 < minf(a.a.y,a.b.y): continue
 			var hit: Variant = Geometry2D.segment_intersects_segment(a.a,a.b,b.a,b.b)

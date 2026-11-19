@@ -43,6 +43,7 @@ func reset_actor() -> void:
 	trail.clear()
 
 func advance(direction: Vector2, delta: float, island: PackedVector2Array) -> void:
+	var was_protected := protection > 0
 	previous = position
 	var speed: float = config.player_speed if team == 0 else config.bot_speed
 	velocity = velocity.move_toward(direction.limit_length() * speed, (config.player_acceleration if team == 0 else config.acceleration) * delta)
@@ -57,7 +58,7 @@ func advance(direction: Vector2, delta: float, island: PackedVector2Array) -> vo
 	sprite.position.y = -34.0 + sin(clock * (10.0 if velocity.length() > 10.0 else 3.0) + team) * (2.2 if velocity.length() > 10.0 else 1.1)
 	sprite.rotation = lerpf(sprite.rotation, heading.x * 0.09, 0.12)
 	sprite.modulate.a = 0.6 + 0.4 * absf(sin(clock * 9.0)) if protection > 0.0 else 1.0
-	queue_redraw()
+	if protection > 0 or was_protected: queue_redraw()
 
 func _draw() -> void:
 	draw_set_transform(Vector2(0, 2), 0, Vector2(1, 0.4))

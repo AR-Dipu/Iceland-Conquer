@@ -28,6 +28,7 @@ func run() -> void:
 		# Uncontested expansion: exercise real steering, movement and capture,
 		# without opponent elimination hiding an expansion failure.
 		for tick in 7200:
+			game.territory.begin_planning_frame()
 			for actor in game.actors.slice(1):
 				var direction: Vector2 = game.brains[actor.team].steer(actor,game.territory,game.current_map,1.0/60)
 				actor.advance(direction,1.0/60,game.island)

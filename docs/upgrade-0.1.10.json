@@ -1,0 +1,21 @@
+{
+  "previous_version": "0.1.9",
+  "previous_code": 10,
+  "installed_version": "0.1.10",
+  "installed_code": 11,
+  "launcher_label": "Country Conquer",
+  "package": "com.islandconquer.prototype",
+  "install_mode": "adb install -r; no data clear",
+  "environment": "Android 35 no-window emulator",
+  "before_and_after": {
+    "player_name": "Captain",
+    "wallet_balance": 140,
+    "starting_country": "bgd",
+    "conquered_countries": [],
+    "wallet_claims": {"daily:20769": 0, "daily:20773": 20, "daily:20776": 20}
+  },
+  "desktop_save_path_before_and_after": "C:/Users/User/AppData/Roaming/Godot/app_userdata/Island Conquer",
+  "certificate_sha256_before_and_after": "44e808f4bf258dba385a56255e7924046b3e42cd4bba3e9620b7e5fa87c990bb",
+  "apk_sha256": "4621CDCE6F7576A077E54BCD8125C8B6B4D781DA5C6385F9B483D1EEDDEA3E16",
+  "physical_device_tested": false
+}

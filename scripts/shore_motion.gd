@@ -2,7 +2,8 @@ class_name ShoreMotion
 extends RefCounted
 const MARGIN: float = 0.35
 
-static func solve(start: Vector2, velocity: Vector2, delta: float, island: PackedVector2Array) -> Dictionary:
+static func solve(start: Vector2, velocity: Vector2, delta: float, island: PackedVector2Array, metric: String = "movement") -> Dictionary:
+	var began := WorkMetrics.start()
 	var steps: int = clampi(ceili(velocity.length()*delta/12.0),1,32)
 	var point := start
 	var current_velocity := velocity
@@ -13,6 +14,7 @@ static func solve(start: Vector2, velocity: Vector2, delta: float, island: Packe
 		current_velocity = step.velocity
 		for p in step.path:
 			if path[-1].distance_to(p) > 0.0001: path.append(p)
+	WorkMetrics.finish(metric,began)
 	return {"position":point,"velocity":current_velocity,"path":path}
 
 static func _slide(start: Vector2, velocity: Vector2, delta: float, island: PackedVector2Array) -> Dictionary:
@@ -24,7 +26,7 @@ static func _slide(start: Vector2, velocity: Vector2, delta: float, island: Pack
 		if remaining.length_squared() < 0.000001: break
 		var fraction: float = INF
 		var edge_index: int = -1
-		for i in island.size():
+		for i in ShoreIndex.edges(island,point,point+remaining):
 			var a: Vector2 = island[i]
 			var b: Vector2 = island[(i+1)%island.size()]
 			var hit: Variant = Geometry2D.segment_intersects_segment(point,point+remaining,a,b)

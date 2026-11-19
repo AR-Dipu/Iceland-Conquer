@@ -1,0 +1,32 @@
+[
+  {
+    "abandoned": 3,
+    "baseline": true,
+    "country": "bgd",
+    "cuts": 4,
+    "initial": 0.0235972347054328,
+    "land": 0.319612276214404,
+    "net_land": 0.296015041508971,
+    "normal_reverse_units": 2109.33412310481,
+    "normal_vulnerable_units": 17920.539975211,
+    "scheduled_wait": 47.1333333333339,
+    "seed": 190,
+    "surviving_bots": 3,
+    "winner": -1
+  },
+  {
+    "abandoned": 0,
+    "baseline": false,
+    "country": "bgd",
+    "cuts": 2,
+    "initial": 0.0235972347054328,
+    "land": 0.442445140366917,
+    "net_land": 0.418847905661484,
+    "normal_reverse_units": 4.78677618503571,
+    "normal_vulnerable_units": 16560.4807418883,
+    "scheduled_wait": 218.466666666661,
+    "seed": 190,
+    "surviving_bots": 5,
+    "winner": -1
+  }
+]

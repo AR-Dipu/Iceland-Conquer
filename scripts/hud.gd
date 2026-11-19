@@ -38,6 +38,10 @@ var font := FontVariation.new()
 var config: GameConfig
 var map: CountryMap
 var territory: TerritoryManager
+var minimap_cache: Dictionary = {}
+var minimap_land := PackedVector2Array()
+var minimap_land_mesh: ArrayMesh
+var minimap_outline_hash: int = -1
 var actors: Array[ConquerCharacter] = []
 var camera: Camera2D
 var difficulty_name: String = "EASY"
@@ -198,16 +202,23 @@ func _minimap() -> void:
 	draw_style_box(box(Color(0.015, 0.20, 0.31, 0.91)), Rect2(522, 184, 174, 219))
 	text("ISLAND MAP", Vector2(609, 207), 12, Color("c9ecf0"), true)
 	var transform: Transform2D = minimap_transform()
-	var land_indices := Geometry2D.triangulate_polygon(map.outline)
-	for i in range(0,land_indices.size(),3):
-		draw_primitive(PackedVector2Array([transform*map.outline[land_indices[i]],transform*map.outline[land_indices[i+1]],transform*map.outline[land_indices[i+2]]]),PackedColorArray([Color("a9ce70")]),PackedVector2Array())
+	var outline_hash: int = hash([map.outline,transform])
+	if minimap_outline_hash != outline_hash:
+		minimap_outline_hash = outline_hash
+		minimap_land = transform*map.outline
+		minimap_land_mesh = minimap_mesh(minimap_land,Geometry2D.triangulate_polygon(map.outline))
+		minimap_cache.clear()
+	if minimap_land_mesh != null: draw_mesh(minimap_land_mesh,null,Transform2D.IDENTITY,Color("a9ce70"))
 	var snapshot: Array = territory.mesh_snapshot()
 	for team in snapshot.size():
-		for piece in snapshot[team].pieces:
-			var p: PackedVector2Array = piece.polygon
-			var indices: PackedInt32Array = piece.indices
-			for i in range(0,indices.size(),3):
-				draw_primitive(PackedVector2Array([transform*p[indices[i]],transform*p[indices[i+1]],transform*p[indices[i+2]]]),PackedColorArray([config.team_colors[team]]),PackedVector2Array())
+		var fingerprint: int = territory.mesh_hashes[team]
+		if minimap_cache.get(team,{}).get("hash",-1) != fingerprint:
+			var meshes: Array = []
+			for piece in snapshot[team].pieces:
+				var mesh := minimap_mesh(transform*piece.polygon,piece.indices)
+				if mesh != null: meshes.append(mesh)
+			minimap_cache[team] = {"hash":fingerprint,"meshes":meshes}
+		for mesh in minimap_cache[team].meshes: draw_mesh(mesh,null,Transform2D.IDENTITY,config.team_colors[team])
 	if is_instance_valid(camera):
 		var frame := minimap_camera_polygon()
 		var clip := PackedVector2Array([Vector2(539,213),Vector2(679,213),Vector2(679,377),Vector2(539,377)])
@@ -222,6 +233,16 @@ func _minimap() -> void:
 		draw_circle(point, 4.3 if actor.team == 0 else 3.5, Color.WHITE)
 		draw_circle(point, 3.1 if actor.team == 0 else 2.5, config.team_colors[actor.team])
 	text(actor_name(0), Vector2(609, 391), 11, Color("dcc2ff"), true)
+
+func minimap_mesh(points: PackedVector2Array, indices: PackedInt32Array) -> ArrayMesh:
+	if indices.is_empty(): return null
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = points
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays)
+	return mesh
 
 func minimap_camera_polygon() -> PackedVector2Array:
 	var size: Vector2 = get_viewport_rect().size

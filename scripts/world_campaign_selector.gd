@@ -245,7 +245,7 @@ func text(value: String, point: Vector2, pixels: int, tint: Color = Color("edfcf
 
 func _draw() -> void:
 	if catalog == null: return
-	text("ISLAND CONQUER",Vector2(28,77),43,Color("ffe49a"))
+	text("COUNTRY CONQUER",Vector2(28,77),39,Color("ffe49a"))
 	text("WORLD CAMPAIGN · %d / %d CONQUERED" % [campaign.conquered.size(),catalog.maps.size()],Vector2(30,120),18,Color("bcf5ee"))
 	if wallet != null: text("%d COINS" % wallet.balance,Vector2(535,155),15,Color("ffe49a"))
 	text("YOUR NAME",Vector2(30,155),13,Color("cbb5ff"))

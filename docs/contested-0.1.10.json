@@ -1,0 +1,50 @@
+[
+  {
+    "abandoned": 2,
+    "captures": 102,
+    "country": "bgd",
+    "cuts": 3,
+    "idle_seconds": 72.6666666666664,
+    "land": 0.323523755022525,
+    "previous_planner": true,
+    "route_overlap": 0.426582457586548,
+    "surviving_bots": 4,
+    "winner": -1
+  },
+  {
+    "abandoned": 3,
+    "captures": 93,
+    "country": "bgd",
+    "cuts": 4,
+    "idle_seconds": 47.1333333333339,
+    "land": 0.319612276214404,
+    "previous_planner": false,
+    "route_overlap": 0.580529408517823,
+    "surviving_bots": 3,
+    "winner": -1
+  },
+  {
+    "abandoned": 4,
+    "captures": 42,
+    "country": "isl",
+    "cuts": 6,
+    "idle_seconds": 7.39999999999998,
+    "land": 0.484798572939928,
+    "previous_planner": true,
+    "route_overlap": 0.20748554595829,
+    "surviving_bots": 1,
+    "winner": -1
+  },
+  {
+    "abandoned": 3,
+    "captures": 54,
+    "country": "isl",
+    "cuts": 4,
+    "idle_seconds": 74.4999999999991,
+    "land": 0.459817245146624,
+    "previous_planner": false,
+    "route_overlap": 0.37453492214577,
+    "surviving_bots": 3,
+    "winner": -1
+  }
+]

@@ -5,6 +5,7 @@ var outline := PackedVector2Array()
 var props: Texture2D = preload("res://assets/environment/tropical_props.png")
 var clock: float = 0.0
 var refresh: float = 0.0
+var shore_cache: Dictionary = {}
 
 func setup(country: CountryMap) -> void:
 	map = country
@@ -12,6 +13,19 @@ func setup(country: CountryMap) -> void:
 	z_index = -10
 	for prop in map.scenery:
 		_add_prop(int(prop.cell), prop.position, float(prop.width))
+	for polygon in [outline]+Array(map.decorative_islands):
+		var shore := _shore(polygon)
+		if shore.is_empty(): continue
+		var water := Line2D.new()
+		water.points = _shift(shore,Vector2(0,17))
+		water.closed = true
+		water.width = 16
+		water.default_color = Color(0.62,1,1,0.5)
+		water.antialiased = true
+		var glow := ShaderMaterial.new()
+		glow.shader = preload("res://assets/shaders/trail_glow.gdshader")
+		water.material = glow
+		add_child(water)
 	queue_redraw()
 
 func _add_prop(cell: int, foot: Vector2, width: float) -> void:
@@ -28,10 +42,15 @@ func _add_prop(cell: int, foot: Vector2, width: float) -> void:
 
 func _process(delta: float) -> void:
 	clock += delta
-	refresh += delta
-	if refresh > 0.08:
-		refresh = 0
-		queue_redraw()
+	# Terrain, polygon offsets, cliffs and grain remain cached. Native water
+	# strokes animate their shader without rebuilding the whole island.
+
+func _shore(poly: PackedVector2Array) -> PackedVector2Array:
+	var key := hash(poly)
+	if not shore_cache.has(key):
+		var shores := Geometry2D.offset_polygon(poly,18,Geometry2D.JOIN_ROUND)
+		shore_cache[key] = shores[0] if not shores.is_empty() else PackedVector2Array()
+	return shore_cache[key]
 
 func _shift(poly: PackedVector2Array, offset: Vector2) -> PackedVector2Array:
 	var result := PackedVector2Array()
@@ -47,12 +66,10 @@ func _ring(poly: PackedVector2Array, width: float, tint: Color) -> void:
 	draw_polyline(closed, tint, width, true)
 
 func _land(poly: PackedVector2Array, decorative: bool = false) -> void:
-	var shores: Array[PackedVector2Array] = Geometry2D.offset_polygon(poly, 18, Geometry2D.JOIN_ROUND)
-	if shores.is_empty():
+	var shore := _shore(poly)
+	if shore.is_empty():
 		return
-	var shore: PackedVector2Array = shores[0]
 	_ring(_shift(shore, Vector2(0, 24)), 36, Color(0, 0.23, 0.40, 0.17))
-	_ring(_shift(shore, Vector2(0, 17)), 16 + sin(clock * 1.5) * 3, Color(0.62, 1, 1, 0.5))
 	draw_colored_polygon(_shift(shore, Vector2(0, 23)), Color("b88d50"))
 	draw_colored_polygon(_shift(shore, Vector2(0, 11)), Color("e4ba7c"))
 	draw_colored_polygon(shore, Color("ffe3a0"))

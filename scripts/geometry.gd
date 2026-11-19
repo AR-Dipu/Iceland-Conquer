@@ -1,5 +1,6 @@
 class_name IslandGeometry
 extends RefCounted
+static var subtraction_errors: int = 0
 ## Continuous polygon helpers. Clockwise contours in Godot booleans are holes.
 
 static func area(poly: PackedVector2Array) -> float:
@@ -49,13 +50,21 @@ static func subtract(subject: PackedVector2Array, cutter: PackedVector2Array, de
 		return result.filter(func(p: PackedVector2Array) -> bool: return area(p) > 2.0)
 	# Polygon2D has no holes. Split the subject through the hole, then subtract
 	# from each half. This preserves the empty space as simple renderable pieces.
-	assert(depth < 12, "Polygon hole split did not converge")
-	var cut_y: float = 0.0
-	for p in hole:
-		cut_y += p.y
-	cut_y /= hole.size()
-	var upper := PackedVector2Array([Vector2(-10000, -10000), Vector2(10000, -10000), Vector2(10000, cut_y), Vector2(-10000, cut_y)])
-	var lower := PackedVector2Array([Vector2(-10000, cut_y), Vector2(10000, cut_y), Vector2(10000, 10000), Vector2(-10000, 10000)])
+	if depth >= 12:
+		# Never erase a subject when boolean precision cannot resolve a hole.
+		# Transaction callers observe this counter and reject their whole change.
+		subtraction_errors += 1
+		return [subject]
+	var box := bounds(hole)
+	var center := box.get_center()
+	var upper: PackedVector2Array
+	var lower: PackedVector2Array
+	if (box.size.x > box.size.y) != (depth%2 == 1):
+		upper = PackedVector2Array([Vector2(-10000,-10000),Vector2(center.x,-10000),Vector2(center.x,10000),Vector2(-10000,10000)])
+		lower = PackedVector2Array([Vector2(center.x,-10000),Vector2(10000,-10000),Vector2(10000,10000),Vector2(center.x,10000)])
+	else:
+		upper = PackedVector2Array([Vector2(-10000,-10000),Vector2(10000,-10000),Vector2(10000,center.y),Vector2(-10000,center.y)])
+		lower = PackedVector2Array([Vector2(-10000,center.y),Vector2(10000,center.y),Vector2(10000,10000),Vector2(-10000,10000)])
 	var pieces: Array[PackedVector2Array] = []
 	for half in [upper, lower]:
 		for p in Geometry2D.intersect_polygons(subject, half):

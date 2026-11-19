@@ -1,0 +1,19 @@
+{
+  "previous_version": "0.1.10",
+  "previous_code": 11,
+  "installed_version": "0.1.11",
+  "installed_code": 12,
+  "package": "com.islandconquer.prototype",
+  "install_mode": "adb install -r; no data clear",
+  "environment": "Android 35 no-window emulator",
+  "before_and_after": {
+    "player_name": "Captain",
+    "wallet_balance": 140,
+    "starting_country": "bgd",
+    "conquered_countries": [],
+    "wallet_claims": {"daily:20769":0,"daily:20773":20,"daily:20776":20}
+  },
+  "certificate_sha256_before_and_after": "44e808f4bf258dba385a56255e7924046b3e42cd4bba3e9620b7e5fa87c990bb",
+  "apk_sha256": "F1DC12791B51E759D4424FF2FFC4E949EABC0BEEA10D271CFCD7532B9BAD3056",
+  "physical_device_tested": false
+}

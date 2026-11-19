@@ -22,7 +22,8 @@ func _initialize() -> void:
 	assert(tm.preview_capture(0,trail).area < 0.1)
 	assert(tm.regions == before,"Preview must not mutate")
 	tm.regions = [[rect(20,20,20,20),rect(100,20,20,20)],[]]
-	assert(tm.preview_capture(0,PackedVector2Array([Vector2(30,30),Vector2(110,30)])).area < 0.1,"Open bridge must not fill unrelated land")
+	var bridge := tm.preview_capture(0,PackedVector2Array([Vector2(30,30),Vector2(110,30)]))
+	assert(bridge.ok and absf(bridge.area-450)<1,"Bridge claims only the 7.5-unit strip across the 60-unit gap")
 	var crossed := CaptureTopology.enclosed([],PackedVector2Array([Vector2(10,10),Vector2(50,50),Vector2(10,50),Vector2(50,10),Vector2(10,10)]))
 	var crossed_area: float = 0
 	for face in crossed.faces: crossed_area += IslandGeometry.area(face)

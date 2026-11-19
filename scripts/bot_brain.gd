@@ -26,6 +26,7 @@ var scored_value: float = 0
 var scored_gain: float = 0
 var scored_home := Vector2.ZERO
 var proposal_revision: int = -1
+var preview_checks: int = 0
 var tactical_clock: float = 0
 var attack_target: ConquerCharacter
 var tactical_action: String = "expand"
@@ -37,11 +38,22 @@ var defensive_returns: int = 0
 var failed_pursuits: int = 0
 var idle_seconds: float = 0
 var legacy_tactics: bool = false
+var pending_preview: CapturePreviewJob
+var pending_candidate: Dictionary = {}
+var planning_owner: TerritoryManager
+var planning_team: int = -1
+var frontier_work: Array = []
+var frontier_cursor: int = 0
+var search_started: bool = false
+var plan_timeout: float = 60
+var plan_direction := Vector2.ZERO
 
 func _init(seed_value: int = 1) -> void:
 	random.seed = seed_value
 
 func reset() -> void:
+	_clear_search()
+	proposal_revision = -1
 	waypoints.clear()
 	elapsed = 0.0
 	stuck = 0.0
@@ -54,7 +66,7 @@ func reset() -> void:
 	replans = 0
 	proposals.clear()
 	attack_target = null
-	tactical_clock = 0
+	tactical_clock = random.randf()*0.2
 	tactical_action = "expand"
 	decision_time = 0
 	attack_deadline = 0
@@ -72,7 +84,9 @@ func steer(actor: ConquerCharacter, territory: TerritoryManager, map: CountryMap
 	tactical_clock -= delta
 	if tactical_clock <= 0:
 		tactical_clock = 0.2
+		var began := WorkMetrics.start()
 		_tactics(actor,territory,map)
+		WorkMetrics.finish("tactical_scan",began)
 	for item in blocked: item.life -= delta
 	blocked = blocked.filter(func(item: Dictionary) -> bool: return item.life > 0)
 	wait -= delta
@@ -82,12 +96,12 @@ func steer(actor: ConquerCharacter, territory: TerritoryManager, map: CountryMap
 	elapsed += delta
 	if has_plan:
 		planner_state = PlannerState.APPROACH if territory.owned(actor.team,actor.position) else PlannerState.RETURN if waypoints.size() <= 2 else PlannerState.EXPAND
-	stuck = stuck + delta if actor.position.distance_to(last_position) < 0.35 else maxf(0,stuck-delta*0.2)
+	stuck = stuck + delta if not waypoints.is_empty() and actor.position.distance_to(last_position) < 0.35 else maxf(0,stuck-delta*0.2)
 	last_position = actor.position
 	if has_plan and not territory.owned(actor.team,planned_return):
 		_fail_plan()
 		_route_home(actor,territory,map)
-	if elapsed > 35.0 or stuck > 1.5:
+	if (has_plan and elapsed > plan_timeout) or stuck > 2.5:
 		_fail_plan()
 		_route_home(actor, territory, map)
 		elapsed = 0.0
@@ -98,7 +112,7 @@ func steer(actor: ConquerCharacter, territory: TerritoryManager, map: CountryMap
 		_plan(actor, territory, map)
 	if waypoints.is_empty():
 		return Vector2.ZERO
-	if actor.position.distance_to(waypoints[0]) < 5.0:
+	if actor.position.distance_to(waypoints[0]) < 5.0 and (waypoints.size() > 1 or actor.trail.points.is_empty() or territory.owned(actor.team,actor.position)):
 		waypoints.pop_front()
 		if waypoints.is_empty():
 			elapsed = 0
@@ -109,13 +123,13 @@ func steer(actor: ConquerCharacter, territory: TerritoryManager, map: CountryMap
 	if recovery > 0:
 		var boundary: Dictionary = IslandGeometry.nearest(map.outline,actor.position)
 		desired = boundary.point.direction_to(IslandGeometry.interior_point(map.outline))
-	var clearance: float = actor.position.distance_to(IslandGeometry.nearest(map.outline,actor.position).point)
+	var clearance: float = actor.position.distance_to(ShoreIndex.nearest(map.outline,actor.position).point)
 	var lookahead: float = clampf(clearance*0.6,8,35)
 	lookahead = minf(lookahead,maxf(5,actor.position.distance_to(waypoints[0])))
 	for angle in [0.0, 0.45, -0.45, 0.9, -0.9, 1.5, -1.5, 2.2, -2.2, PI]:
 		var candidate: Vector2 = desired.rotated(angle)
 		var predicted: Vector2 = actor.velocity.move_toward(candidate*actor.config.bot_speed,actor.config.acceleration*delta)
-		var motion := ShoreMotion.solve(actor.position,predicted,maxf(delta,lookahead/actor.config.bot_speed),map.outline)
+		var motion := ShoreMotion.solve(actor.position,predicted,maxf(delta,lookahead/actor.config.bot_speed),map.outline,"shore_prediction")
 		if actor.position.distance_to(motion.position) > 0.05 and (motion.position-actor.position).dot(desired) > 0:
 			return candidate
 	actor.velocity = Vector2.ZERO
@@ -135,7 +149,7 @@ func _old_tactics(actor: ConquerCharacter, territory: TerritoryManager, map: Cou
 	if exposed:
 		for enemy in territory.nearby_actors:
 			if not enemy.active or enemy.team == actor.team: continue
-			for i in actor.trail.points.size()-1:
+			for i in actor.trail.near_segments(enemy.position,450):
 				var point := Geometry2D.get_closest_point_to_segment(enemy.position,actor.trail.points[i],actor.trail.points[i+1])
 				var speed: float = enemy.config.player_speed if enemy.team == 0 else enemy.config.bot_speed
 				if enemy.position.distance_to(point) < 600 and enemy.position.distance_to(point)/speed < home_distance/actor.config.bot_speed+0.5:
@@ -154,7 +168,7 @@ func _old_tactics(actor: ConquerCharacter, territory: TerritoryManager, map: Cou
 	var crossing := Vector2.ZERO
 	for enemy in territory.nearby_actors:
 		if not enemy.active or enemy.team == actor.team or enemy.protection > 0: continue
-		for i in range(0,enemy.trail.points.size()-1,2):
+		for i in enemy.trail.near_segments(actor.position,actor.config.bot_speed*(0.65 if exposed else 3.0)):
 			var a: Vector2 = enemy.trail.points[i]
 			var b: Vector2 = enemy.trail.points[i+1]
 			var hit := Geometry2D.get_closest_point_to_segment(actor.position,a,b)
@@ -181,14 +195,8 @@ func _tactics(actor: ConquerCharacter, territory: TerritoryManager, map: Country
 	if legacy_tactics:
 		_old_tactics(actor,territory,map)
 		return
-	var home := actor.position
-	var home_distance: float = INF
-	for polygon in territory.regions[actor.team]:
-		for i in range(0,polygon.size(),maxi(1,polygon.size()/12)):
-			var candidate: Vector2 = polygon[i].lerp(IslandGeometry.interior_point(polygon),0.08)
-			if territory.owned(actor.team,candidate) and actor.position.distance_to(candidate) < home_distance:
-				home = candidate
-				home_distance = actor.position.distance_to(candidate)
+	var home := territory.safe_home(actor.team,actor.position)
+	var home_distance: float = actor.position.distance_to(home)
 	var exposed: bool = actor.trail.points.size() >= 2
 	# Only a moving intercept or an enemy already at the trail is a threat.
 	var threatened: bool = false
@@ -196,7 +204,7 @@ func _tactics(actor: ConquerCharacter, territory: TerritoryManager, map: Country
 		var return_eta: float = home_distance/actor.config.bot_speed
 		for enemy in territory.nearby_actors:
 			if not enemy.active or enemy.team == actor.team: continue
-			for i in actor.trail.points.size()-1:
+			for i in actor.trail.near_segments(enemy.position,450):
 				var point := Geometry2D.get_closest_point_to_segment(enemy.position,actor.trail.points[i],actor.trail.points[i+1])
 				var distance: float = enemy.position.distance_to(point)
 				var closing: float = enemy.velocity.dot(enemy.position.direction_to(point))
@@ -207,8 +215,8 @@ func _tactics(actor: ConquerCharacter, territory: TerritoryManager, map: Country
 		if tactical_action != "defend" or waypoints.is_empty() or not territory.owned(actor.team,waypoints[-1]):
 			if has_plan: abandoned_loops += 1
 			has_plan = false
-			proposals.clear()
-			waypoints.assign(Array(map.route(actor.position,home)))
+			_clear_search()
+			waypoints = _safe_return(actor,territory,map,home)
 			defensive_returns += 1
 		attack_target = null
 		tactical_action = "defend"
@@ -234,20 +242,20 @@ func _tactics(actor: ConquerCharacter, territory: TerritoryManager, map: Country
 			leader = other.team
 	for enemy in territory.nearby_actors:
 		if not enemy.active or enemy.team == actor.team or enemy.protection > 0: continue
-		for i in range(0,enemy.trail.points.size()-1,2):
+		var enemy_return: float = INF
+		for polygon in territory.regions[enemy.team]: enemy_return = minf(enemy_return,enemy.position.distance_to(IslandGeometry.nearest(polygon,enemy.position).point))
+		for i in enemy.trail.near_segments(actor.position,actor.config.bot_speed*(0.65 if exposed else 3.0)):
 			var hit := Geometry2D.get_closest_point_to_segment(actor.position,enemy.trail.points[i],enemy.trail.points[i+1])
 			var time: float = actor.position.distance_to(hit)/actor.config.bot_speed
 			if time < 0.02 or time > (0.65 if exposed else 3.0): continue
 			var end: Vector2 = hit+actor.position.direction_to(hit)*14
 			if not IslandGeometry.segment_inside(map.outline,actor.position,end): continue
-			var enemy_return: float = INF
-			for polygon in territory.regions[enemy.team]: enemy_return = minf(enemy_return,enemy.position.distance_to(IslandGeometry.nearest(polygon,enemy.position).point))
 			var enemy_speed: float = enemy.config.player_speed if enemy.team == 0 else enemy.config.bot_speed
 			if time+0.2 >= enemy_return/enemy_speed: continue
 			var fraction: float = territory.fractions[enemy.team] if enemy.team < territory.fractions.size() else 0.01
 			var value: float = (fraction+0.01)/maxf(0.25,time)
 			if enemy.team == leader and leading >= 0.65: value *= 3
-			var expansion_value: float = expected_fraction/maxf(1,(35-elapsed)) if has_plan else 0
+			var expansion_value: float = expected_fraction/maxf(1,plan_timeout/1.8-elapsed) if has_plan else 0
 			if value <= expansion_value*1.5 or value <= best_value: continue
 			best_value = value
 			target = enemy
@@ -255,12 +263,13 @@ func _tactics(actor: ConquerCharacter, territory: TerritoryManager, map: Country
 	if target != null:
 		if has_plan: abandoned_loops += 1
 		has_plan = false
-		proposals.clear()
+		_clear_search()
 		attack_target = target
 		attack_deadline = decision_time+3.5
 		tactical_action = "attack"
 		waypoints = [crossing]
 		wait = 0
+
 
 static func overlap_ratio(route: PackedVector2Array) -> float:
 	var overlap: float = 0
@@ -277,9 +286,11 @@ static func overlap_ratio(route: PackedVector2Array) -> float:
 func _fail_plan() -> void:
 	planner_state = PlannerState.RECOVER
 	if has_plan:
-		blocked.append({"point":plan_origin,"life":18.0 if legacy_tactics else 6.0})
+		blocked.append({"point":plan_origin,"direction":plan_direction,"life":15.0})
 		failures = mini(5,failures+1)
 	has_plan = false
+	tactical_action = "recover"
+	_clear_search()
 	replans += 1
 
 func _finish_plan(actor: ConquerCharacter, territory: TerritoryManager) -> void:
@@ -314,6 +325,11 @@ func _route_home(actor: ConquerCharacter, territory: TerritoryManager, map: Coun
 		waypoints = [escape]
 
 func _plan(actor: ConquerCharacter, territory: TerritoryManager, map: CountryMap) -> void:
+	var began := Time.get_ticks_usec()
+	_plan_work(actor,territory,map)
+	territory.planning_spent_usec += Time.get_ticks_usec()-began
+
+func _plan_work(actor: ConquerCharacter, territory: TerritoryManager, map: CountryMap) -> void:
 	if legacy_planning:
 		_legacy_plan(actor,territory,map)
 		return
@@ -321,95 +337,172 @@ func _plan(actor: ConquerCharacter, territory: TerritoryManager, map: CountryMap
 		planner_state = PlannerState.RETURN
 		_route_home(actor,territory,map)
 		return
-	if has_plan: _finish_plan(actor,territory)
-	if proposals.is_empty() or proposal_revision != territory.revision:
-		proposals.clear()
-		scored_route.clear()
-		scored_value = 0
-		proposal_revision = territory.revision
-		var frontier: Array = territory.frontiers(actor.team).duplicate()
-		frontier.sort_custom(func(a: Dictionary,b: Dictionary) -> bool: return a.home.distance_to(actor.position) < b.home.distance_to(actor.position))
-		for i in mini(10,frontier.size()):
-			var item: Dictionary = frontier[(i+actor.team)%frontier.size()]
-			var denied: bool = false
-			for bad in blocked:
-				if item.home.distance_to(bad.point) < (45 if legacy_tactics else 15): denied = true
-			if denied: continue
-			for shape in (3 if legacy_tactics else 4):
-				var reach: float = ([180.0,360.0,560.0][shape] if legacy_tactics else [50.0,100.0,180.0,300.0][shape] if territory.fractions[actor.team] > 0.75 else [90.0,180.0,360.0,560.0][shape])
-				var direction: Vector2 = item.direction if legacy_tactics else item.direction.rotated([-0.55,0.0,0.55][i%3])
-				proposals.append({"home":item.home,"direction":direction,"reach":reach,"shape":shape})
-		if proposals.is_empty():
-			if legacy_tactics: _legacy_plan(actor,territory,map)
-			else: _reposition(actor,territory,map)
+	var own_hash: int = hash(territory.regions[actor.team])
+	if proposal_revision != own_hash:
+		_clear_search()
+		proposal_revision = own_hash
+	if pending_preview != null:
+		if territory.planning_budget < 0 and not pending_preview.done: pending_preview.step(Time.get_ticks_usec()+2000)
+		if pending_preview.canceled:
+			pending_preview = null
 			return
-	planner_state = PlannerState.ASSESS
-	for work in 2:
-		if proposals.is_empty(): break
-		var proposal: Dictionary = proposals.pop_back()
-		var home: Vector2 = proposal.home
-		var direction: Vector2 = proposal.direction
-		var side := direction.orthogonal()
-		var reach: float = proposal.reach
-		var route: Array[Vector2]
-		if proposal.shape == 0:
-			route = [home,home+direction*reach+side*reach*0.5,home+direction*reach-side*reach*0.5,home]
-		else:
-			route = [home,home+direction*reach*0.3+side*reach*0.8,home+direction*reach+side*reach*0.8,home+direction*reach-side*reach*0.8,home+direction*reach*0.3-side*reach*0.8,home]
-		# Close through a different owned entry instead of retracing the exit.
-		var return_point := home
-		var return_score: float = INF
-		for frontier in territory.frontiers(actor.team):
-			var candidate: Vector2 = frontier.home
-			if candidate.distance_to(home) < 20: continue
-			var score: float = candidate.distance_to(route[-2])
-			if score < return_score and IslandGeometry.segment_inside(map.outline,route[-2],candidate):
-				return_score = score
-				return_point = candidate
-		route[-1] = return_point
-		if not legacy_tactics and overlap_ratio(PackedVector2Array(route)) > 0.1: continue
-		var valid: bool = true
-		var length: float = actor.position.distance_to(home)
-		for i in route.size()-1:
-			if not IslandGeometry.segment_inside(map.outline,route[i],route[i+1]): valid = false
-			length += route[i].distance_to(route[i+1])
-		if not valid: continue
-		var preview: Dictionary = territory.preview_capture(actor.team,PackedVector2Array(route))
-		if not preview.ok or preview.area < (400 if legacy_tactics else 8 if territory.fractions[actor.team] > 0.8 else 150): continue
-		var risk: float = 0
-		for other in territory.nearby_actors:
-			if not other.active or other.team == actor.team: continue
-			var distance: float = other.position.distance_to(home)
-			if distance < 600: risk += (600-distance)/600
-		var value: float = preview.area/maxf(1,length/actor.config.bot_speed)/(1+risk*0.3)
-		if not legacy_tactics:
+		if not pending_preview.done: return
+		var preview: Dictionary = pending_preview.result
+		pending_preview = null
+		preview_checks += 1
+		if preview.ok and preview.area > (8 if territory.fractions[actor.team] > 0.8 else 150):
+			var route: PackedVector2Array = pending_candidate.path
+			var length: float = pending_candidate.length
+			var value: float = preview.area/maxf(1,length/actor.config.bot_speed)
+			value /= 1+pending_candidate.risk*0.15
 			if territory.fractions[actor.team]+preview.area/territory.island_area >= actor.config.win_fraction: value *= 10
-			for other in territory.nearby_actors:
-				if not other.active or other.team == actor.team or territory.fractions[other.team] < 0.65: continue
-				var denied: float = 0
-				for addition in preview.pieces:
-					for owned_piece in territory.regions[other.team]:
-						for piece in Geometry2D.intersect_polygons(addition,owned_piece): denied += IslandGeometry.area(piece)
-				value *= 1+denied/maxf(1,preview.area)
-		if value > scored_value:
-			scored_value = value
-			scored_gain = preview.area
-			scored_route = route
-			scored_home = home
-	if not proposals.is_empty(): return
-	if scored_route.is_empty():
-		if legacy_tactics: _legacy_plan(actor,territory,map)
-		else: _reposition(actor,territory,map)
+			if value > scored_value:
+				scored_value = value
+				scored_gain = preview.area
+				scored_route.assign(Array(route))
+				scored_home = pending_candidate.home
+	if preview_checks >= 6 and not scored_route.is_empty():
+		_commit_plan(actor,map)
 		return
+	if not territory.request_planning(actor.team): return
+	planning_owner = territory
+	planning_team = actor.team
+	planner_state = PlannerState.ASSESS
+	if not search_started:
+		frontier_work = territory.frontiers(actor.team).duplicate()
+		frontier_work.sort_custom(func(a: Dictionary,b: Dictionary) -> bool: return a.home.distance_squared_to(actor.position) < b.home.distance_squared_to(actor.position))
+		if frontier_work.size() > 10: frontier_work.resize(10)
+		search_started = true
+		frontier_cursor = 0
+	if frontier_cursor < frontier_work.size():
+		_generate_frontier(actor,territory,map,frontier_work[frontier_cursor])
+		frontier_cursor += 1
+		if frontier_cursor == frontier_work.size():
+			proposals.sort_custom(func(a: Dictionary,b: Dictionary) -> bool: return a.estimate > b.estimate)
+		return
+	if proposals.is_empty() or preview_checks >= 24:
+		if not scored_route.is_empty(): _commit_plan(actor,map)
+		else:
+			_clear_search()
+			_reposition(actor,territory,map)
+		return
+	var candidate: Dictionary = proposals.pop_front()
+	var route: PackedVector2Array = candidate.path
+	for i in route.size()-1:
+		if not ShoreIndex.segment_inside(map.outline,route[i],route[i+1]): return
+	var excursion := territory.closed_excursion(actor.team,route)
+	if excursion.size() < 4 or overlap_ratio(excursion) > 0.1: return
+	candidate.path = excursion
+	candidate.length = actor.position.distance_to(candidate.home)
+	for i in excursion.size()-1: candidate.length += excursion[i].distance_to(excursion[i+1])
+	pending_candidate = candidate
+	pending_preview = territory.start_preview(actor.team,excursion)
+
+func _generate_frontier(actor: ConquerCharacter, territory: TerritoryManager, map: CountryMap, frontier: Dictionary) -> void:
+	var began := WorkMetrics.start()
+	var home: Vector2 = frontier.home
+	var direction: Vector2 = frontier.direction
+	var available: float = ShoreIndex.reach(map.outline,home,direction,750)
+	available = territory.open_reach(actor.team,home,direction,available)
+	for depth_factor in [0.1,0.2,0.4,0.65,0.9]:
+		var depth: float = minf(600,available*depth_factor)
+		if territory.fractions[actor.team] > 0.8: depth = minf(depth,220)
+		if depth < 35: continue
+		for handedness in [-1.0,1.0]:
+			var side: Vector2 = direction.orthogonal()*handedness
+			var width: float = minf(depth*0.65,250)
+			var entry := home
+			var best: float = INF
+			for item in frontier_work:
+				if item.home.distance_to(home) < 20: continue
+				var score: float = item.home.distance_to(home-side*width)
+				if score < best:
+					best = score
+					entry = item.home
+			var forbidden: bool = false
+			for bad in blocked:
+				if home.distance_to(bad.point) < 18 and direction.dot(bad.get("direction",direction)) > 0.7: forbidden = true
+			if forbidden: continue
+			var path := PackedVector2Array([home,home+direction*depth*0.25+side*width,home+direction*depth+side*width,home+direction*depth-side*width,entry+direction*depth*0.25-side*width*0.3,entry])
+			var inside: bool = true
+			var unowned: float = 0
+			for point in path:
+				if not Geometry2D.is_point_in_polygon(point,map.outline): inside = false
+				if not territory.owned(actor.team,point): unowned += 1
+			if not inside or unowned < 3: continue
+			var length: float = actor.position.distance_to(home)
+			for i in path.size()-1: length += path[i].distance_to(path[i+1])
+			var risk: float = 0
+			for enemy in territory.nearby_actors:
+				if enemy.active and enemy.team != actor.team and enemy.position.distance_to(home) < 200: risk += 1
+			var estimate: float = depth*width*1.5*(unowned/6)/maxf(1,length/actor.config.bot_speed)/(1+risk*0.15)
+			proposals.append({"path":path,"home":home,"length":length,"estimate":estimate,"risk":risk})
+	WorkMetrics.finish("planning_candidates",began)
+
+func _commit_plan(actor: ConquerCharacter, map: CountryMap) -> void:
 	waypoints.assign(Array(map.route(actor.position,scored_home)))
 	waypoints.append_array(scored_route.slice(1))
 	planned_return = scored_route[-1]
 	plan_origin = scored_home
-	plan_fraction = territory.fractions[actor.team]
-	expected_fraction = scored_gain/territory.island_area
+	plan_direction = scored_route[0].direction_to(scored_route[1])
+	plan_fraction = planning_owner.fractions[actor.team]
+	expected_fraction = scored_gain/maxf(1,planning_owner.island_area)
+	var length: float = actor.position.distance_to(scored_home)
+	for i in scored_route.size()-1: length += scored_route[i].distance_to(scored_route[i+1])
+	plan_timeout = length/actor.config.bot_speed*1.8+6
 	has_plan = true
+	tactical_action = "expand"
 	planner_state = PlannerState.APPROACH
 	elapsed = 0
+	stuck = 0
+	_clear_search()
+
+func _clear_search() -> void:
+	if planning_owner != null and is_instance_valid(planning_owner) and planning_team >= 0: planning_owner.cancel_preview(planning_team)
+	pending_preview = null
+	proposals.clear()
+	frontier_work.clear()
+	scored_route.clear()
+	scored_value = 0
+	preview_checks = 0
+	frontier_cursor = 0
+	search_started = false
+
+func note_capture(gain: float, territory: TerritoryManager) -> void:
+	if not has_plan: return
+	if gain > maxf(0.0002,expected_fraction*0.2):
+		completed_captures += 1
+		failures = maxi(0,failures-1)
+	else: blocked.append({"point":plan_origin,"direction":plan_direction,"life":15.0})
+	has_plan = false
+	waypoints.clear()
+	_clear_search()
+	elapsed = 0
+	stuck = 0
+	wait = 0.1
+
+func _safe_return(actor: ConquerCharacter, territory: TerritoryManager, map: CountryMap, fallback: Vector2) -> Array[Vector2]:
+	var choices: Array[Vector2] = [fallback]
+	if territory.owned(actor.team,planned_return): choices.append(planned_return)
+	var frontier := territory.frontiers(actor.team).duplicate()
+	frontier.sort_custom(func(a: Dictionary,b: Dictionary) -> bool: return a.home.distance_squared_to(actor.position) < b.home.distance_squared_to(actor.position))
+	for i in mini(6,frontier.size()): choices.append(frontier[i].home)
+	var best: float = INF
+	var result: Array[Vector2] = []
+	for point in choices:
+		if not ShoreIndex.segment_inside(map.outline,actor.position,point): continue
+		var route := actor.trail.points.duplicate()
+		route.append(actor.position)
+		route.append(point)
+		var distance := actor.position.distance_to(point)
+		# A different corridor wins at similar travel time; survival remains
+		# more important than overlap during a genuine interception threat.
+		var score := distance*(1+overlap_ratio(route)*0.5)
+		if score < best:
+			best = score
+			result = [point]
+	if result.is_empty(): result.assign(Array(map.route(actor.position,fallback)))
+	return result
 
 func _reposition(actor: ConquerCharacter, territory: TerritoryManager, map: CountryMap) -> void:
 	var best: float = INF
