@@ -1,0 +1,132 @@
+[
+  {
+    "captures": [
+      0,
+      3,
+      31,
+      15
+    ],
+    "country": "bgd",
+    "final": 0.0923706622299353,
+    "initial": 0.0101129590243371,
+    "legacy": true,
+    "two_minutes": 0.044568012923776
+  },
+  {
+    "captures": [
+      0,
+      28,
+      30,
+      18
+    ],
+    "country": "bgd",
+    "final": 0.412951642865164,
+    "initial": 0.0101129590243371,
+    "legacy": false,
+    "two_minutes": 0.195427025954084
+  },
+  {
+    "captures": [
+      0,
+      14,
+      41,
+      21
+    ],
+    "country": "ind",
+    "final": 0.220594960952461,
+    "initial": 0.00972071229563637,
+    "legacy": true,
+    "two_minutes": 0.0783231302026622
+  },
+  {
+    "captures": [
+      0,
+      29,
+      31,
+      36
+    ],
+    "country": "ind",
+    "final": 0.403649685768936,
+    "initial": 0.00972071229563637,
+    "legacy": false,
+    "two_minutes": 0.107858942643044
+  },
+  {
+    "captures": [
+      0,
+      30,
+      16,
+      27
+    ],
+    "country": "lka",
+    "final": 0.256874497606626,
+    "initial": 0.00921245423797198,
+    "legacy": true,
+    "two_minutes": 0.132251419183963
+  },
+  {
+    "captures": [
+      0,
+      23,
+      13,
+      12
+    ],
+    "country": "lka",
+    "final": 0.708075321920966,
+    "initial": 0.00921245423797198,
+    "legacy": false,
+    "two_minutes": 0.464187109354681
+  },
+  {
+    "captures": [
+      0,
+      2,
+      30,
+      43
+    ],
+    "country": "jpn",
+    "final": 0.112626719729554,
+    "initial": 0.0148416229901561,
+    "legacy": true,
+    "two_minutes": 0.0513383602118974
+  },
+  {
+    "captures": [
+      0,
+      42,
+      44,
+      45
+    ],
+    "country": "jpn",
+    "final": 0.297012514044439,
+    "initial": 0.0148416229901561,
+    "legacy": false,
+    "two_minutes": 0.081192270571632
+  },
+  {
+    "captures": [
+      0,
+      11,
+      29,
+      18
+    ],
+    "country": "isl",
+    "final": 0.140926546251683,
+    "initial": 0.00784461981663961,
+    "legacy": true,
+    "two_minutes": 0.0759380061768203
+  },
+  {
+    "captures": [
+      0,
+      37,
+      15,
+      17
+    ],
+    "country": "isl",
+    "final": 0.610018296118778,
+    "initial": 0.00784461981663961,
+    "legacy": false,
+    "two_minutes": 0.33955820962566
+  }
+]

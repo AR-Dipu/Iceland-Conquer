@@ -198,24 +198,36 @@ func _minimap() -> void:
 	draw_style_box(box(Color(0.015, 0.20, 0.31, 0.91)), Rect2(522, 184, 174, 219))
 	text("ISLAND MAP", Vector2(609, 207), 12, Color("c9ecf0"), true)
 	var transform: Transform2D = minimap_transform()
-	draw_colored_polygon(transform * map.outline, Color("a9ce70"))
-	for team in territory.regions.size():
-		for p in territory.regions[team]:
-			draw_colored_polygon(transform * p, config.team_colors[team])
+	var land_indices := Geometry2D.triangulate_polygon(map.outline)
+	for i in range(0,land_indices.size(),3):
+		draw_primitive(PackedVector2Array([transform*map.outline[land_indices[i]],transform*map.outline[land_indices[i+1]],transform*map.outline[land_indices[i+2]]]),PackedColorArray([Color("a9ce70")]),PackedVector2Array())
+	var snapshot: Array = territory.mesh_snapshot()
+	for team in snapshot.size():
+		for piece in snapshot[team].pieces:
+			var p: PackedVector2Array = piece.polygon
+			var indices: PackedInt32Array = piece.indices
+			for i in range(0,indices.size(),3):
+				draw_primitive(PackedVector2Array([transform*p[indices[i]],transform*p[indices[i+1]],transform*p[indices[i+2]]]),PackedColorArray([config.team_colors[team]]),PackedVector2Array())
 	if is_instance_valid(camera):
-		var world_size: Vector2 = get_viewport_rect().size / camera.zoom
-		var frame := Rect2(camera.get_screen_center_position() - world_size * 0.5, world_size)
-		var visual := Rect2(transform * frame.position, frame.size * transform.get_scale())
-		visual = visual.intersection(Rect2(534, 212, 150, 168))
-		if visual.has_area():
-			draw_rect(visual, Color(0.85, 1, 1, 0.55), false, 1.0)
+		var frame := minimap_camera_polygon()
+		var clip := PackedVector2Array([Vector2(539,213),Vector2(679,213),Vector2(679,377),Vector2(539,377)])
+		for piece in Geometry2D.intersect_polygons(frame,clip):
+			piece.append(piece[0])
+			draw_polyline(piece,Color(0.85,1,1,0.65),1,true)
 	for actor in actors:
 		if not actor.active:
 			continue
 		var point: Vector2 = transform * actor.position
+		if not Rect2(539,213,140,164).has_point(point): continue
 		draw_circle(point, 4.3 if actor.team == 0 else 3.5, Color.WHITE)
 		draw_circle(point, 3.1 if actor.team == 0 else 2.5, config.team_colors[actor.team])
 	text(actor_name(0), Vector2(609, 391), 11, Color("dcc2ff"), true)
+
+func minimap_camera_polygon() -> PackedVector2Array:
+	var size: Vector2 = get_viewport_rect().size
+	var inverse := get_viewport().get_canvas_transform().affine_inverse()
+	var transform := minimap_transform()
+	return PackedVector2Array([transform*(inverse*Vector2.ZERO),transform*(inverse*Vector2(size.x,0)),transform*(inverse*size),transform*(inverse*Vector2(0,size.y))])
 
 func _draw() -> void:
 	if config == null or map == null or not is_instance_valid(territory):

@@ -1,0 +1,78 @@
+[
+  {
+    "abandoned_loops": 0,
+    "completed_captures": 48,
+    "completed_loop_mean_overlap": 0.54057227455078,
+    "country": "bgd",
+    "failed_pursuits": 0,
+    "final": 0.0943373396260379,
+    "idle_seconds": 52.6500000000008,
+    "initial": 0.0101129590243371,
+    "old018": true,
+    "recorded_attacks": 0,
+    "survival_seconds": [
+      120.0,
+      120.0,
+      120.0,
+      120.0
+    ],
+    "winner": -1
+  },
+  {
+    "abandoned_loops": 0,
+    "completed_captures": 49,
+    "completed_loop_mean_overlap": 0.428887060564655,
+    "country": "bgd",
+    "failed_pursuits": 0,
+    "final": 0.363011174942684,
+    "idle_seconds": 45.9500000000005,
+    "initial": 0.0101129590243371,
+    "old018": false,
+    "recorded_attacks": 0,
+    "survival_seconds": [
+      120.0,
+      120.0,
+      120.0,
+      120.0
+    ],
+    "winner": -1
+  },
+  {
+    "abandoned_loops": 0,
+    "completed_captures": 56,
+    "completed_loop_mean_overlap": 0.363619720124068,
+    "country": "isl",
+    "failed_pursuits": 0,
+    "final": 0.115051199044319,
+    "idle_seconds": 40.0000000000007,
+    "initial": 0.00784461981663961,
+    "old018": true,
+    "recorded_attacks": 0,
+    "survival_seconds": [
+      120.0,
+      120.0,
+      120.0,
+      120.0
+    ],
+    "winner": -1
+  },
+  {
+    "abandoned_loops": 1,
+    "completed_captures": 16,
+    "completed_loop_mean_overlap": 0.203602516148959,
+    "country": "isl",
+    "failed_pursuits": 1,
+    "final": 0.184928128482764,
+    "idle_seconds": 47.0999999999991,
+    "initial": 0.00784461981663961,
+    "old018": false,
+    "recorded_attacks": 1,
+    "survival_seconds": [
+      120.0,
+      120.0,
+      51.7833333333333,
+      120.0
+    ],
+    "winner": -1
+  }
+]

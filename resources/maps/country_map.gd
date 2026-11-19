@@ -151,8 +151,24 @@ func route(start: Vector2, target: Vector2) -> PackedVector2Array:
 			from_id = i
 		if Geometry2D.is_point_in_polygon(target, triangles[i]):
 			to_id = i
-	if from_id < 0 or to_id < 0:
-		return PackedVector2Array([start])
+	# Boundary samples can be inside the coast yet fall exactly on a triangle
+	# edge. Connect through a visible navigation center rather than returning
+	# the actor's current position as a permanently unreachable home route.
+	if from_id < 0:
+		var best: float = INF
+		for i in triangles.size():
+			var point: Vector2 = navigation.get_point_position(i)
+			if start.distance_squared_to(point) < best and IslandGeometry.segment_inside(outline,start,point):
+				best = start.distance_squared_to(point)
+				from_id = i
+	if to_id < 0:
+		var best: float = INF
+		for i in triangles.size():
+			var point: Vector2 = navigation.get_point_position(i)
+			if target.distance_squared_to(point) < best and IslandGeometry.segment_inside(outline,target,point):
+				best = target.distance_squared_to(point)
+				to_id = i
+	if from_id < 0 or to_id < 0: return PackedVector2Array([start])
 	var path: PackedVector2Array = navigation.get_point_path(from_id, to_id)
 	path.append(target)
 	var result := PackedVector2Array()

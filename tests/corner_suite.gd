@@ -33,7 +33,12 @@ func run() -> void:
 					actor.advance(direction,1.0/60,game.island)
 					travel += actor.previous.distance_to(actor.position)
 					assert(Geometry2D.is_point_in_polygon(actor.position,game.island),"Opponent left island")
-				assert(travel > 25,"Opponent stuck near coastline: "+id)
+				if travel <= 25:
+					print("STUCK ",id," level=",level," team=",actor.team," from=",spawn," to=",actor.position," velocity=",actor.velocity," waypoints=",game.brains[actor.team].waypoints)
+					print("SAFE=",game.current_map._safe_spawn(spawn)," nearest=",IslandGeometry.nearest(game.island,spawn)," clockwise=",Geometry2D.is_polygon_clockwise(game.island))
+					for direction in [Vector2.RIGHT,Vector2.LEFT,Vector2.UP,Vector2.DOWN]: print("MOTION ",direction," ",ShoreMotion.solve(spawn,direction*91,0.35,game.island))
+					quit(1)
+					return
 				checks += 1
 		print("CORNER PASS ",id)
 	game.queue_free()

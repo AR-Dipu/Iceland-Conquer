@@ -63,20 +63,39 @@ static func subtract(subject: PackedVector2Array, cutter: PackedVector2Array, de
 	return pieces
 
 static func merge_regions(polys: Array[PackedVector2Array]) -> Array[PackedVector2Array]:
-	var result: Array[PackedVector2Array] = polys.duplicate()
+	var result: Array[PackedVector2Array] = []
+	for p in polys:
+		var clean := clean_polygon(p)
+		if simple(clean): result.append(clean)
 	var changed := true
 	while changed:
 		changed = false
 		for i in result.size():
 			for j in range(i + 1, result.size()):
 				var merged: Array[PackedVector2Array] = Geometry2D.merge_polygons(result[i], result[j])
-				if merged.size() == 1 and not Geometry2D.is_polygon_clockwise(merged[0]):
-					result[i] = merged[0]
+				if merged.size() == 1 and not Geometry2D.is_polygon_clockwise(merged[0]) and simple(clean_polygon(merged[0])):
+					result[i] = clean_polygon(merged[0])
 					result.remove_at(j)
 					changed = true
 					break
 			if changed:
 				break
+	return result
+
+static func clean_polygon(poly: PackedVector2Array) -> PackedVector2Array:
+	var result := PackedVector2Array()
+	for p in poly:
+		if result.is_empty() or result[-1].distance_to(p) > 0.02: result.append(p)
+	if result.size() > 1 and result[0].distance_to(result[-1]) <= 0.02: result.remove_at(result.size()-1)
+	for pass_index in 2:
+		if result.size() < 3: break
+		var clean := PackedVector2Array()
+		for i in result.size():
+			var a: Vector2 = result[(i-1+result.size())%result.size()]
+			var b: Vector2 = result[i]
+			var c: Vector2 = result[(i+1)%result.size()]
+			if b.distance_to(Geometry2D.get_closest_point_to_segment(b,a,c)) > 0.005: clean.append(b)
+		result = clean
 	return result
 
 static func boundary_capture(poly: PackedVector2Array, trail: PackedVector2Array) -> PackedVector2Array:

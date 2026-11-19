@@ -35,5 +35,16 @@ flood();const sea=[];
 while(visited.size<entries.length){let best=Infinity,pair;for(const a of entries)if(visited.has(a.id))for(const b of entries)if(!visited.has(b.id)){let d=distance(a,b);if(d<best){best=d;pair=[a,b];}}link(...pair,true);sea.push(pair.map(e=>e.id));flood();}
 entries.sort((a,b)=>a.name.localeCompare(b.name));
 fs.writeFileSync(path.join(root,'assets/maps/countries.json'),JSON.stringify(entries));
+const edgeOwners=new Map(), sourceRings=[];
+const key=p=>p.map(n=>n.toFixed(5)).join(',');
+const edge=(a,b)=>[key(a),key(b)].sort().join('|');
+for(const f of source.features){
+ if(f.properties.CONTINENT==='Antarctica')continue;
+ const rings=(f.geometry.type==='Polygon'?[f.geometry.coordinates]:f.geometry.coordinates).map(p=>p[0]);
+ for(const ring of rings){sourceRings.push(ring);for(let i=0;i<ring.length-1;i++){const k=edge(ring[i],ring[i+1]);if(!edgeOwners.has(k))edgeOwners.set(k,[]);edgeOwners.get(k).push(f.properties.CONTINENT);}}
+}
+const seenEdges=new Set(), borders=[];
+for(const ring of sourceRings){let chain=[];for(let i=0;i<ring.length-1;i++){const k=edge(ring[i],ring[i+1]),owners=edgeOwners.get(k);if((owners.length===1||new Set(owners).size>1)&&!seenEdges.has(k)){seenEdges.add(k);if(!chain.length)chain.push(ring[i]);chain.push(ring[i+1]);}else{if(chain.length>1)borders.push(chain);chain=[];}}if(chain.length>1)borders.push(chain);}
+fs.writeFileSync(path.join(root,'assets/maps/continent_borders.json'),JSON.stringify(borders));
 fs.writeFileSync(path.join(root,'assets/maps/world-routes.json'),JSON.stringify({description:'Fixed gameplay links chosen by nearest simplified coastline between disconnected land components. Not political borders.',sea_routes:sea,countries:entries.map(e=>({id:e.id,name:e.name,continent:e.continent}))},null,2));
 console.log(`${entries.length} countries; ${sea.length} sea routes; graph connected`);

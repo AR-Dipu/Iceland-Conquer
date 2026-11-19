@@ -1,4 +1,10 @@
-# Island Conquer 0.1.5
+# Island Conquer 0.1.9
+
+Focused winning-AI update: committed conquest loops, credible threat detection, stable defensive returns, valuable trail interceptions, and small endgame pocket captures. See docs/UPDATE-0.1.9.md for targeted tests and contested measurements.
+
+Full bounded-area capture, exact shoreline boundary transitions, shared minimap geometry/camera footprint, strategic frontier AI, explicit first-country confirmation, and fresh opponents filling vacancies every 30 active seconds below 40% human ownership. See docs/UPDATE-0.1.7.md and docs/VALIDATION-0.1.7.md. Existing progress and wallet saves are retained.
+
+Map-only campaign selection, pencil-based name editing, shoreline sliding, and frontier-scored opponent expansion. Difficulty changes opponent counts only. See docs/UPDATE-0.1.6.md and docs/VALIDATION-0.1.6.md. Validation stays internal/headless or in a no-window emulator.
 
 World campaign: 176 offline country/territory maps, continent filters, search, map zoom, neighbor conquest and fixed sea routes. Choose a starting country, save your name, and expand your frontier. All characters start with small territory dots and can cross their own trails safely. Anyone wins at 99% actual ownership, shown as 100%. Demo ads now take three foreground seconds. See docs/UPDATE-0.1.5.md and assets/maps/world-routes.json.
 

@@ -2,6 +2,7 @@ class_name CampaignProgress
 extends RefCounted
 var path: String = "user://campaign.cfg"
 var player_name: String = "Captain"
+var name_saved: bool = false
 var starting: String = ""
 var conquered: Array[String] = []
 var previous_names: Array[String] = []
@@ -10,6 +11,7 @@ func open(wallet: PracticeWallet) -> void:
 	var file := ConfigFile.new()
 	if file.load(path) == OK:
 		player_name = str(file.get_value("profile", "name", "Captain"))
+		name_saved = bool(file.get_value("profile","name_saved",file.has_section_key("profile","name")))
 		starting = str(file.get_value("campaign", "starting", ""))
 		for id in file.get_value("campaign", "conquered", []): conquered.append(str(id))
 	for key in wallet.data.get("claims", {}):
@@ -20,18 +22,22 @@ func open(wallet: PracticeWallet) -> void:
 func save() -> bool:
 	var file := ConfigFile.new()
 	file.set_value("profile", "name", player_name)
+	file.set_value("profile", "name_saved", name_saved)
 	file.set_value("campaign", "starting", starting)
 	file.set_value("campaign", "conquered", conquered)
 	if file.save(path + ".tmp") != OK: return false
 	return DirAccess.rename_absolute(path + ".tmp", path) == OK
 
 func set_name(value: String) -> bool:
-	value = value.strip_edges().replace("\n", " ").replace("\r", " ").left(16)
-	if value.is_empty(): return false
+	value = value.replace("\n", " ").replace("\r", " ").strip_edges()
+	if value.is_empty() or value.length() > 16: return false
 	var old := player_name
+	var was_saved := name_saved
 	player_name = value
+	name_saved = true
 	if save(): return true
 	player_name = old
+	name_saved = was_saved
 	return false
 
 func can_attack(id: String, catalog: CountryCatalog) -> bool:

@@ -39,6 +39,7 @@ var ad_return: State = State.DEFEATED
 var campaign := CampaignProgress.new()
 var player_names: Array[String] = []
 var profile_path: String = "user://"
+var arrival_elapsed: float = 0
 
 func revival_price() -> int:
 	return wallet.settings.revival_prices[mini(coin_revives, wallet.settings.revival_prices.size() - 1)]
@@ -130,13 +131,14 @@ func _set_state(next: State) -> void:
 	var labels: Array[String] = ["selection", "loading", "playing", "paused", "round_over", "defeated", "demo_ad"]
 	hud.set_mode(labels[state], winning_team)
 	selector.visible = state == State.SELECTION or state == State.LOADING
-	selector.play_button.disabled = state == State.LOADING or not campaign.can_attack(selected_country,catalog)
+	selector.play_button.disabled = state == State.LOADING or not selector.can_play()
 	if is_instance_valid(world_root):
 		world_root.visible = state != State.SELECTION and state != State.LOADING
 		world_root.process_mode = Node.PROCESS_MODE_INHERIT if state == State.PLAYING else Node.PROCESS_MODE_DISABLED
 	for actor in actors:
 		actor.velocity = Vector2.ZERO
 		actor.previous = actor.position
+		actor.movement_path = PackedVector2Array([actor.position])
 
 func _clear_world() -> void:
 	hud.mobile.release()
@@ -230,6 +232,7 @@ func load_country(country_id: String) -> bool:
 	feedback.draw.connect(_draw_feedback)
 	world_root.add_child(feedback)
 	hud.bind_world(current_map, territory, actors, camera)
+	territory.nearby_actors = actors
 	return true
 
 func start_round() -> void:
@@ -247,6 +250,7 @@ func start_round() -> void:
 	winning_team = -1
 	coin_revives = 0
 	active_seconds = 0
+	arrival_elapsed = 0
 	match_id = Crypto.new().generate_random_bytes(16).hex_encode()
 	if not load_country(selected_country):
 		selector.message = "This island could not load. Choose another."
@@ -283,6 +287,10 @@ func _physics_process(delta: float) -> void:
 		_capture_preview.call_deferred()
 	if state != State.PLAYING:
 		return
+	arrival_elapsed += delta
+	if arrival_elapsed >= 30:
+		arrival_elapsed = fmod(arrival_elapsed,30)
+		try_newcomer()
 	for actor in actors:
 		if not actor.active:
 			continue
@@ -308,6 +316,74 @@ func _physics_process(delta: float) -> void:
 			return
 	camera.position = actors[0].position + Vector2(0, -90)
 
+func try_newcomer() -> bool:
+	if state != State.PLAYING or territory.fractions[0] >= 0.4: return false
+	var active: int = 0
+	var used: Array[int] = []
+	for actor in actors:
+		if actor.active:
+			used.append(config.cat_indices[actor.team])
+			if actor.team > 0: active += 1
+	if active >= [3,5,7][difficulty]: return false
+	var spawn := Vector2.ZERO
+	var patch := PackedVector2Array()
+	for attempt in 80:
+		var point := current_map.land_bounds.position+Vector2(randf(),randf())*current_map.land_bounds.size
+		if not current_map._safe_spawn(point) or point.distance_to(IslandGeometry.nearest(island,point).point) < 48: continue
+		var candidate := IslandGeometry.blob(point,Vector2.ONE*40,0,32)
+		var clear: bool = true
+		for actor in actors:
+			if actor.active and actor.position.distance_to(point) < 130: clear = false
+		for polys in territory.regions:
+			for p in polys:
+				if not Geometry2D.intersect_polygons(candidate,p).is_empty(): clear = false
+		if clear:
+			spawn = point
+			patch = candidate
+			break
+	if patch.is_empty(): return false
+	var variant: int = 1
+	while used.has(variant) and variant <= 7: variant += 1
+	if variant > 7: return false
+	var team: int = actors.size()
+	config.spawn_points.append(spawn)
+	config.cat_indices.resize(maxi(config.cat_indices.size(),team+1))
+	config.team_colors.resize(maxi(config.team_colors.size(),team+1))
+	config.cat_indices[team] = variant
+	config.team_colors[team] = [Color("9b5cff"),Color("ff5b68"),Color("ffd33d"),Color("59d68b"),Color("23cde3"),Color("ff993f"),Color("f777c5"),Color("4388f4")][variant]
+	territory.initial.append([patch])
+	territory.regions.append([patch])
+	territory.fractions.append(0)
+	var actor: ConquerCharacter = CHARACTER_SCENE.instantiate()
+	actor.setup(team,config)
+	world_root.add_child(actor.trail)
+	world_root.add_child(actor)
+	actor.reset_actor()
+	actors.append(actor)
+	var brain := BotBrain.new(randi())
+	brain.reset()
+	brains.append(brain)
+	home_points.append(spawn)
+	home_regions.append(patch)
+	var name: String = ""
+	for candidate in campaign.round_names(8).slice(1):
+		if not player_names.has(candidate):
+			name = candidate
+			break
+	if name.is_empty(): name = "Voyager " + str(team)
+	player_names.append(name)
+	hud.player_names = player_names
+	var label := Label.new()
+	label.text = name
+	label.position = Vector2(-65,-100)
+	label.size.x = 130
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_override("font",hud.font)
+	actor.add_child(label)
+	territory._update_fractions()
+	hud.show_toast(name+" joined the island!")
+	return true
+
 func _resolve_attacks() -> void:
 	var defeated: Array[int] = []
 	var killers: Dictionary = {}
@@ -321,10 +397,14 @@ func _resolve_attacks() -> void:
 				continue
 			if attacker == victim:
 				continue
-			elif victim.trail.hits(attacker.previous, attacker.position, config.trail_hit_radius):
-				if not defeated.has(victim.team):
-					defeated.append(victim.team)
-					killers[victim.team] = attacker.team
+			else:
+				var path := _actor_path(attacker)
+				for i in path.size()-1:
+					if victim.trail.hits(path[i],path[i+1],config.trail_hit_radius):
+						if not defeated.has(victim.team):
+							defeated.append(victim.team)
+							killers[victim.team] = attacker.team
+						break
 	defeated.sort()
 	for team in defeated:
 		if team > 0:
@@ -348,7 +428,59 @@ func _home_entry(actor: ConquerCharacter) -> float:
 				result = minf(result, actor.previous.distance_to(hit) / distance)
 	return result
 
+func _actor_path(actor: ConquerCharacter) -> PackedVector2Array:
+	if actor.movement_path.size() >= 2 and actor.movement_path[0].is_equal_approx(actor.previous) and actor.movement_path[-1].is_equal_approx(actor.position): return actor.movement_path
+	return PackedVector2Array([actor.previous,actor.position])
+
 func _update_trail(actor: ConquerCharacter) -> void:
+	var path := _actor_path(actor)
+	var original_previous := actor.previous
+	var destination := actor.position
+	for i in path.size()-1:
+		actor.previous = path[i]
+		actor.position = path[i+1]
+		_update_trail_segment(actor)
+		if not actor.position.is_equal_approx(path[i+1]) or state != State.PLAYING: return
+	actor.previous = original_previous
+	actor.position = destination
+
+func _update_trail_segment(actor: ConquerCharacter) -> void:
+	var a := actor.previous
+	var b := actor.position
+	if a.distance_to(b) < 0.0001: return
+	var cuts: Array[float] = [0,1]
+	for polygon in territory.regions[actor.team]:
+		for i in polygon.size():
+			var hit: Variant = Geometry2D.segment_intersects_segment(a,b,polygon[i],polygon[(i+1)%polygon.size()])
+			if hit != null: cuts.append(clampf(a.distance_to(hit)/a.distance_to(b),0,1))
+	cuts.sort()
+	for i in cuts.size()-1:
+		if cuts[i+1]-cuts[i] < 0.00001: continue
+		var start: Vector2 = a.lerp(b,cuts[i])
+		var finish: Vector2 = a.lerp(b,cuts[i+1])
+		var midpoint: Vector2 = (start+finish)*0.5
+		if territory.owned(actor.team,midpoint):
+			if actor.trail.points.size() >= 2:
+				actor.trail.append_point(start)
+				territory.capture(actor.team,actor.trail.points,actor.trail.departure)
+				if actor.team == 0 and not territory.last_capture_error.is_empty(): hud.show_toast(territory.last_capture_error)
+				actor.trail.clear()
+				if state != State.PLAYING: return
+			home_points[actor.team] = finish
+			home_regions[actor.team] = territory.region_at(actor.team,midpoint)
+		else:
+			if actor.trail.points.is_empty():
+				actor.trail.departure = home_regions[actor.team].duplicate()
+				actor.trail.append_point(start)
+			elif actor.trail.points.size() > 1:
+				var old_direction: Vector2 = actor.trail.points[-2].direction_to(actor.trail.points[-1])
+				if old_direction.dot(start.direction_to(finish)) < 0.95 and actor.trail.points[-1].distance_to(start) > 0.01: actor.trail.append_point(start)
+			if actor.trail.points[-1].distance_to(finish) >= config.trail_spacing: actor.trail.append_point(finish)
+			if actor.trail.points.size() >= config.max_trail_points:
+				reset_character(actor.team)
+				return
+
+func _legacy_update_trail_segment(actor: ConquerCharacter) -> void:
 	var trail: ConquerTrail = actor.trail
 	var entry: float = _home_entry(actor)
 	if entry > 0.0 and entry <= 1.0 and not trail.points.is_empty():
@@ -532,6 +664,7 @@ func _revive_player() -> void:
 			safe = candidate
 	actor.position = safe
 	actor.previous = safe
+	actor.movement_path = PackedVector2Array([safe])
 	actor.trail.clear()
 	actor.protection = wallet.settings.shield_seconds
 	home_points[0] = safe

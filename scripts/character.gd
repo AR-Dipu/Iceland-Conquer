@@ -9,6 +9,7 @@ var heading := Vector2.ZERO
 var protection: float = 0.0
 var clock: float = 0.0
 var previous := Vector2.ZERO
+var movement_path := PackedVector2Array()
 var trail: ConquerTrail
 var sprite: Sprite2D
 var atlas: Texture2D = preload("res://assets/characters/cats.png")
@@ -36,6 +37,7 @@ func reset_actor() -> void:
 	position = config.spawn_points[team]
 	previous = position
 	velocity = Vector2.ZERO
+	movement_path = PackedVector2Array([position])
 	heading = Vector2.ZERO
 	protection = config.protection_seconds
 	trail.clear()
@@ -44,23 +46,10 @@ func advance(direction: Vector2, delta: float, island: PackedVector2Array) -> vo
 	previous = position
 	var speed: float = config.player_speed if team == 0 else config.bot_speed
 	velocity = velocity.move_toward(direction.limit_length() * speed, (config.player_acceleration if team == 0 else config.acceleration) * delta)
-	var target: Vector2 = position + velocity * delta
-	var hit_distance: float = INF
-	var hit_point: Vector2 = target
-	for i in island.size():
-		var hit: Variant = Geometry2D.segment_intersects_segment(position, target, island[i], island[(i + 1) % island.size()])
-		if hit != null and position.distance_to(hit) > 0.001 and position.distance_to(hit) < hit_distance:
-			hit_distance = position.distance_to(hit)
-			hit_point = hit
-	if hit_distance < INF:
-		position = IslandGeometry.clamp_inside(island, hit_point)
-		velocity = Vector2.ZERO
-	elif Geometry2D.is_point_in_polygon(target, island):
-		position = target
-	else:
-		var boundary: Dictionary = IslandGeometry.nearest(island, target)
-		position = IslandGeometry.clamp_inside(island, target)
-		velocity *= 0.35
+	var motion := ShoreMotion.solve(position,velocity,delta,island)
+	position = motion.position
+	velocity = motion.velocity
+	movement_path = motion.path
 	if velocity.length() > 2.0:
 		heading = velocity.normalized()
 	clock += delta

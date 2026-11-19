@@ -1,0 +1,38 @@
+extends SceneTree
+func rectangle(p: Vector2) -> PackedVector2Array:
+	return PackedVector2Array([p,p+Vector2(100,0),p+Vector2(100,100),p+Vector2(0,100)])
+func _initialize() -> void:
+	var config := GameConfig.new()
+	config.spawn_points = [Vector2(500,500),Vector2(100,100)]
+	var enemy := ConquerCharacter.new()
+	enemy.setup(0,config)
+	var actor := ConquerCharacter.new()
+	actor.setup(1,config)
+	var territory := TerritoryManager.new()
+	territory.regions = [[rectangle(Vector2(800,800))],[rectangle(Vector2(50,50))]]
+	territory.nearby_actors = [enemy,actor]
+	var map := CountryMap.new()
+	map.outline = PackedVector2Array([Vector2.ZERO,Vector2(1000,0),Vector2(1000,1000),Vector2(0,1000)])
+	map.build()
+	var brain := BotBrain.new()
+	actor.position = Vector2(200,200)
+	actor.trail.points = PackedVector2Array([Vector2(100,100),Vector2(200,100),Vector2(200,200)])
+	enemy.position = Vector2(150,105)
+	brain._tactics(actor,territory,map)
+	assert(brain.tactical_action == "defend")
+	actor.trail.clear()
+	actor.position = Vector2(100,100)
+	enemy.position = Vector2(500,500)
+	enemy.trail.points = PackedVector2Array([Vector2(200,50),Vector2(200,250)])
+	brain._tactics(actor,territory,map)
+	assert(brain.tactical_action == "attack" and brain.attack_target == enemy)
+	enemy.trail.clear()
+	brain._tactics(actor,territory,map)
+	assert(brain.attack_target == null and brain.tactical_action == "expand")
+	enemy.trail.free()
+	actor.trail.free()
+	enemy.free()
+	actor.free()
+	territory.free()
+	print("RESULT 3 tactical decision checks passed")
+	quit()
