@@ -42,7 +42,7 @@ func _initialize() -> void:
 	trail.append_point(Vector2(0,0))
 	trail.append_point(Vector2(10,10))
 	trail._sync_strokes()
-	assert(trail.strokes.size() == 4 and not trail.stroke_dirty)
+	assert(trail.strokes.size() == 2 and trail.strokes[0].texture != null and not trail.stroke_dirty)
 	trail._process(1.0/60)
 	assert(not trail.stroke_dirty,"Glow does not rebuild unchanged strokes")
 	trail.free()

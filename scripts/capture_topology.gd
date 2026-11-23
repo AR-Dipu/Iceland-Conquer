@@ -55,23 +55,36 @@ static func enclosed_prepared(prepared: Dictionary) -> Dictionary:
 	var neighbors: Array = []
 	var trail_edges: Dictionary = {}
 	for s in segments:
-		s.cuts.sort()
-		for i in s.cuts.size()-1:
-			if s.cuts[i+1]-s.cuts[i] < 0.000001: continue
-			var u := _vertex(s.a.lerp(s.b,s.cuts[i]),vertices,ids,neighbors)
-			var v := _vertex(s.a.lerp(s.b,s.cuts[i+1]),vertices,ids,neighbors)
+		var cuts: Array = s.cuts
+		var a: Vector2 = s.a
+		var b: Vector2 = s.b
+		var is_trail: bool = s.trail
+		cuts.sort()
+		for i in cuts.size()-1:
+			if cuts[i+1]-cuts[i] < 0.000001: continue
+			var u := _vertex(a.lerp(b,cuts[i]),vertices,ids,neighbors)
+			var v := _vertex(a.lerp(b,cuts[i+1]),vertices,ids,neighbors)
 			if u == v: continue
 			if not neighbors[u].has(v): neighbors[u].append(v)
 			if not neighbors[v].has(u): neighbors[v].append(u)
-			if s.trail:
+			if is_trail:
 				trail_edges[Vector2i(u,v)] = true
 				trail_edges[Vector2i(v,u)] = true
 	for u in vertices.size():
-		neighbors[u].sort_custom(func(a: int,b: int) -> bool: return (vertices[a]-vertices[u]).angle() < (vertices[b]-vertices[u]).angle())
+		var edges: Array = neighbors[u]
+		if edges.size() == 2:
+			var first: int = edges[0]
+			var second: int = edges[1]
+			if (vertices[second]-vertices[u]).angle() < (vertices[first]-vertices[u]).angle():
+				edges[0] = second
+				edges[1] = first
+		elif edges.size() > 2:
+			edges.sort_custom(func(a: int,b: int) -> bool: return (vertices[a]-vertices[u]).angle() < (vertices[b]-vertices[u]).angle())
 	WorkMetrics.finish("topology_graph",phase_began)
 	phase_began = WorkMetrics.start()
 	var visited: Dictionary = {}
 	var faces: Array[PackedVector2Array] = []
+	var walk_limit := segments.size()*4+4
 	for start in vertices.size():
 		for next in neighbors[start]:
 			if visited.has(Vector2i(start,next)): continue
@@ -80,7 +93,7 @@ static func enclosed_prepared(prepared: Dictionary) -> Dictionary:
 			var polygon := PackedVector2Array()
 			var touched: bool = false
 			var closed: bool = false
-			for step in segments.size()*4+4:
+			for step in walk_limit:
 				var key := Vector2i(u,v)
 				if visited.has(key):
 					closed = u == start and v == next

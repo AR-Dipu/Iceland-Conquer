@@ -11,26 +11,39 @@ var departure := PackedVector2Array()
 var prepared_capture: Dictionary = {}
 var prepared_owner: Array = []
 var prepared_points: int = 0
+var prepared_polygon := 0
+var prepared_edge := 0
 
 func prepare_capture(owned: Array, closing: bool = false) -> Dictionary:
 	if points.size() < 2: return {}
 	if prepared_capture.is_empty() or prepared_owner != owned or prepared_points > points.size():
-		if closing or points.size() > 8: return {}
-		var vertices := 0
-		for polygon in owned: vertices += polygon.size()
-		if vertices > 220: return {}
+		if closing: return {}
 		prepared_owner = owned.duplicate()
-		prepared_capture = CaptureTopology.begin(owned)
+		prepared_capture = {"segments":[],"buckets":{}}
+		prepared_polygon = 0
+		prepared_edge = 0
 		prepared_points = 1
-	if closing and points.size() - prepared_points > 2: return {}
-	for i in range(prepared_points, points.size()):
-		CaptureTopology.append_segment(prepared_capture, points[i-1], points[i], true)
-	prepared_points = points.size()
+	if closing and (prepared_polygon < prepared_owner.size() or points.size()-prepared_points > 2): return {}
+	var deadline := Time.get_ticks_usec()+400
+	while prepared_polygon < prepared_owner.size():
+		var polygon: PackedVector2Array = prepared_owner[prepared_polygon]
+		if prepared_edge >= polygon.size():
+			prepared_polygon += 1
+			prepared_edge = 0
+			continue
+		CaptureTopology.append_segment(prepared_capture,polygon[prepared_edge],polygon[(prepared_edge+1)%polygon.size()],false)
+		prepared_edge += 1
+		if Time.get_ticks_usec() >= deadline: return {}
+	while prepared_points < points.size():
+		CaptureTopology.append_segment(prepared_capture,points[prepared_points-1],points[prepared_points],true)
+		prepared_points += 1
+		if not closing and Time.get_ticks_usec() >= deadline and prepared_points < points.size(): return {}
 	return prepared_capture
 var tint: Color = Color.CYAN
 var age: float = 0.0
 var stroke_dirty: bool = true
 var strokes: Array[Line2D] = []
+static var halo_texture: GradientTexture2D
 var cells: Dictionary = {}
 var indexed_count: int = 0
 var stroke_tint := Color.TRANSPARENT
@@ -107,7 +120,7 @@ func _process(delta: float) -> void:
 func _sync_strokes() -> void:
 	var began := WorkMetrics.start()
 	if strokes.is_empty():
-		for width in [26.0,15.0,7.5,2.5]:
+		for width in [26.0,2.5]:
 			var line := Line2D.new()
 			line.width = width
 			line.joint_mode = Line2D.LINE_JOINT_ROUND
@@ -118,8 +131,20 @@ func _sync_strokes() -> void:
 			strokes.append(line)
 		var glow := ShaderMaterial.new()
 		glow.shader = preload("res://assets/shaders/trail_glow.gdshader")
+		if halo_texture == null:
+			var gradient := Gradient.new()
+			gradient.offsets = PackedFloat32Array([0.0,0.14,0.31,0.45,0.55,0.69,0.86,1.0])
+			gradient.colors = PackedColorArray([Color(1,1,1,0),Color(1,1,1,0.12),Color(1,1,1,0.45),Color.WHITE,Color.WHITE,Color(1,1,1,0.45),Color(1,1,1,0.12),Color(1,1,1,0)])
+			halo_texture = GradientTexture2D.new()
+			halo_texture.gradient = gradient
+			halo_texture.width = 2
+			halo_texture.height = 64
+			halo_texture.fill_to = Vector2(0,1)
+		strokes[0].texture = halo_texture
+		strokes[0].texture_mode = Line2D.LINE_TEXTURE_STRETCH
+		strokes[0].antialiased = false # The texture softens the outer edge.
 		strokes[0].material = glow
-	var colors := [Color(tint,0.125),Color(tint.lightened(0.4),0.35),tint.lightened(0.65),Color(1,1,1,0.86)]
+	var colors := [Color(tint.lightened(0.40),0.82),Color(1,1,1,0.86)]
 	for i in strokes.size():
 		strokes[i].points = points
 		strokes[i].default_color = colors[i]

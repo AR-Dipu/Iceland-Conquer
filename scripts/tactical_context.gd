@@ -7,13 +7,13 @@ static func travel_seconds(distance: float, speed: float, acceleration: float, i
 	if distance <= accelerate_distance: return (sqrt(start*start+2*acceleration*distance)-start)/acceleration
 	return (speed-start)/acceleration+(distance-accelerate_distance)/speed
 static func route_distance(map: CountryMap, start: Vector2, finish: Vector2) -> float:
-	var key := hash([map.outline,start,finish])
+	var key := hash([map.get_instance_id(),start,finish])
 	if distance_cache.has(key):
 		var entry: Dictionary = distance_cache[key]
 		if entry.start == start and entry.finish == finish and entry.outline == map.outline: return entry.length
 	var length := _route_distance_exact(map,start,finish)
 	if distance_cache.size() >= 1024: distance_cache.erase(distance_cache.keys()[0])
-	distance_cache[key] = {"start":start,"finish":finish,"outline":map.outline.duplicate(),"length":length}
+	distance_cache[key] = {"start":start,"finish":finish,"outline":map.outline,"length":length}
 	return length
 static func _route_distance_exact(map: CountryMap, start: Vector2, finish: Vector2) -> float:
 	if ShoreIndex.segment_inside(map.outline,start,finish): return start.distance_to(finish)

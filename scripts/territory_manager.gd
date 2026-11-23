@@ -163,10 +163,10 @@ func _step_team_mesh(team: int) -> bool:
 	if mesh_work.is_empty():
 		var bounds: Array[Rect2] = []
 		for polygon in regions[team]: bounds.append(IslandGeometry.bounds(polygon).grow(0.51))
-		mesh_work = {"polygon":0,"edge":0,"pieces":[],"edges":PackedVector2Array(),"bounds":bounds}
+		mesh_work = {"polygon":0,"edge":0,"pieces":[],"edges":PackedVector2Array(),"strokes":PackedVector2Array(),"bounds":bounds}
 	var index: int = mesh_work.polygon
 	if index >= regions[team].size():
-		staged_meshes[team] = {"pieces":mesh_work.pieces,"edges":mesh_work.edges}
+		staged_meshes[team] = {"pieces":mesh_work.pieces,"edges":mesh_work.edges,"strokes":mesh_work.strokes}
 		staged_hashes[team] = hash(regions[team])
 		mesh_work.clear()
 		return true
@@ -176,6 +176,7 @@ func _step_team_mesh(team: int) -> bool:
 		var indices := IslandGeometry.triangles_cached(polygon)
 		mesh_work.pieces.append({"polygon":polygon,"indices":indices,"mesh":_fill_mesh(polygon,indices)})
 	var edges: PackedVector2Array = mesh_work.edges
+	var strokes: PackedVector2Array = mesh_work.strokes
 	var stop := mini(offset+32,polygon.size())
 	for i in range(offset,stop):
 		var a := polygon[i]
@@ -190,6 +191,16 @@ func _step_team_mesh(team: int) -> bool:
 		if not shared:
 			edges.append(a)
 			edges.append(b)
+			var span := a.distance_to(b)
+			var before := polygon[posmod(i-1,polygon.size())]
+			var after := polygon[(i+2)%polygon.size()]
+			var inset_a := minf(2.0, minf(span,a.distance_to(before))*0.2)
+			var inset_b := minf(2.0, minf(span,b.distance_to(after))*0.2)
+			var a_joint := a + (a.direction_to(before)+a.direction_to(b))*inset_a*0.25
+			var b_joint := b + (b.direction_to(a)+b.direction_to(after))*inset_b*0.25
+			strokes.append(a_joint)
+			strokes.append(b_joint)
+	mesh_work.strokes = strokes
 	mesh_work.edges = edges
 	mesh_work.edge = 0 if stop == polygon.size() else stop
 	if stop == polygon.size(): mesh_work.polygon += 1
@@ -529,7 +540,6 @@ func _update_fractions() -> void:
 			total += IslandGeometry.area(p)
 		fractions[team] = clampf(total / island_area, 0.0, 1.0)
 	territory_changed.emit(fractions)
-	queue_redraw()
 
 func _process(delta: float) -> void:
 	_pump_meshes()
@@ -591,12 +601,25 @@ func _draw() -> void:
 	if config == null:
 		return
 	var snapshot := render_snapshot()
+	var drawn_edges: Dictionary = {}
 	for team in snapshot.size():
 		var color: Color = config.team_colors[team]
 		for piece in snapshot[team].pieces:
 			if not piece.indices.is_empty():
 				draw_mesh(piece.mesh,null,Transform2D.IDENTITY,Color(color,0.63))
 		var edges: PackedVector2Array = snapshot[team].edges
+		var rounded: PackedVector2Array = snapshot[team].get("strokes",PackedVector2Array())
+		var visible := PackedVector2Array()
+		for segment in edges.size()/2:
+			var a := edges[segment*2]
+			var b := edges[segment*2+1]
+			if drawn_edges.has(Vector4(b.x,b.y,a.x,a.y)): continue
+			drawn_edges[Vector4(a.x,a.y,b.x,b.y)] = true
+			if rounded.is_empty(): visible.append_array(PackedVector2Array([a,b]))
+			else:
+				visible.append(rounded[segment*2])
+				visible.append(rounded[segment*2+1])
+		edges = visible
 		if not edges.is_empty():
 			draw_multiline(edges,Color(color.darkened(0.5),0.82),2.8,true)
 			draw_multiline(edges,Color(color.lightened(0.30),0.75),1.0,true)

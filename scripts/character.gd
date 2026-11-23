@@ -7,11 +7,12 @@ var config: GameConfig
 var velocity := Vector2.ZERO
 var heading := Vector2.ZERO
 var protection: float = 0.0
-var clock: float = 0.0
 var previous := Vector2.ZERO
 var movement_path := PackedVector2Array()
 var trail: ConquerTrail
 var sprite: Sprite2D
+var visual: Node2D
+var facing := 1.0
 var atlas: Texture2D = preload("res://assets/characters/cats.png")
 const Collection = preload("res://scripts/character_collection.gd")
 var speed_multiplier := 1.0
@@ -62,7 +63,10 @@ func setup(index: int, settings: GameConfig) -> void:
 	sprite.scale = Vector2.ONE * (94.0 / float(sprite.texture.get_width()))
 	art_scale = sprite.scale.x
 	sprite.position.y = -34.0
-	add_child(sprite)
+	visual = Node2D.new()
+	visual.draw.connect(_draw_presentation)
+	add_child(visual)
+	visual.add_child(sprite)
 
 func reset_actor() -> void:
 	position = config.spawn_points[team]
@@ -72,9 +76,14 @@ func reset_actor() -> void:
 	heading = Vector2.ZERO
 	protection = config.protection_seconds
 	trail.clear()
+	facing = 1.0
+	sprite.scale = Vector2.ONE * art_scale
+	pose_time = 0.0
+	snap_visual()
 
 func advance(direction: Vector2, delta: float, island: PackedVector2Array) -> void:
 	var was_protected := protection > 0
+	var ripple_active := pose == "revive" and pose_time > 0.0
 	previous = position
 	velocity = velocity.move_toward(direction.limit_length() * movement_speed(), movement_acceleration() * delta)
 	var motion := ShoreMotion.solve(position,velocity,delta,island)
@@ -83,27 +92,35 @@ func advance(direction: Vector2, delta: float, island: PackedVector2Array) -> vo
 	movement_path = motion.path
 	if velocity.length() > 2.0:
 		heading = velocity.normalized()
-	clock += delta
 	protection = maxf(0.0, protection - delta)
 	pose_time = maxf(0.0,pose_time-delta)
-	var moving := velocity.length_squared() > 100
-	var stride := sin(clock * (16.0 if moving else 3.0) + team)
-	var reaction := sin(PI*pose_time/0.32)
-	var lift := reaction * (11.0 if pose == "capture" else 8.0)
-	sprite.position.y = -34.0 - lift - (absf(stride)*6.0 if moving else stride*1.8)
-	var squash := stride*0.05 if moving else stride*0.02
-	sprite.scale = Vector2(1.0-squash,1.0+squash+reaction*0.12)*art_scale
-	if absf(heading.x) > 0.2: sprite.flip_h = heading.x < 0
-	sprite.rotation = lerpf(sprite.rotation, heading.x * 0.09, 0.12)
-	sprite.modulate.a = 0.6 + 0.4 * absf(sin(clock * 9.0)) if protection > 0.0 else 1.0
-	if protection > 0 or was_protected: queue_redraw()
+	if was_protected != (protection > 0) or ripple_active: visual.queue_redraw()
 
-func _draw() -> void:
-	draw_set_transform(Vector2(0, 2), 0, Vector2(1, 0.4))
-	draw_circle(Vector2.ZERO, 30, Color(0.02, 0.13, 0.20, 0.17))
-	draw_circle(Vector2.ZERO, 21, Color(0.02, 0.13, 0.20, 0.12))
-	draw_set_transform(Vector2.ZERO)
+func visual_world_position() -> Vector2:
+	return previous.lerp(position, Engine.get_physics_interpolation_fraction())
+
+func snap_visual() -> void:
+	previous = position
+	if visual != null:
+		visual.position = Vector2.ZERO
+		visual.queue_redraw()
+
+func _process(delta: float) -> void:
+	if not active or visual == null: return
+	visual.position = visual_world_position() - position
+	if absf(heading.x) > 0.28: facing = signf(heading.x)
+	var reaction := sin(PI * pose_time / 0.32)
+	sprite.position.y = -34.0 - reaction * (11.0 if pose == "capture" else 8.0)
+	sprite.scale.x = lerpf(sprite.scale.x, facing * art_scale, 1.0 - exp(-delta * 30.0))
+	sprite.scale.y = (1.0 + reaction * 0.12) * art_scale
+
+
+func _draw_presentation() -> void:
+	visual.draw_set_transform(Vector2(0, 2), 0, Vector2(1, 0.4))
+	visual.draw_circle(Vector2.ZERO, 30, Color(0.02, 0.13, 0.20, 0.17))
+	visual.draw_circle(Vector2.ZERO, 21, Color(0.02, 0.13, 0.20, 0.12))
+	visual.draw_set_transform(Vector2.ZERO)
 	if protection > 0.0:
-		draw_arc(Vector2(0, -12), 41, 0, TAU, 48, Color(1, 1, 1, 0.55), 2.0, true)
+		visual.draw_arc(Vector2(0, -12), 41, 0, TAU, 48, Color(1, 1, 1, 0.55), 2.0, true)
 		if pose == "revive" and pose_time > 0.0:
-			draw_arc(Vector2(0,-12),42.0+(1.0-pose_time/0.32)*24.0,0,TAU,32,Color(0.72,0.94,1.0,pose_time/0.32),3,true)
+			visual.draw_arc(Vector2(0,-12),42.0+(1.0-pose_time/0.32)*24.0,0,TAU,32,Color(0.72,0.94,1.0,pose_time/0.32),3,true)

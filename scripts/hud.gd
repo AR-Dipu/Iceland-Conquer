@@ -73,9 +73,9 @@ var config: GameConfig
 var map: CountryMap
 var territory: TerritoryManager
 var minimap_motion: Node2D
-var minimap_land := PackedVector2Array()
+var minimap_static: Node2D
+var minimap_projection := Transform2D.IDENTITY
 var minimap_land_mesh: ArrayMesh
-var minimap_outline_hash: int = -1
 var actors: Array[ConquerCharacter] = []
 var camera: Camera2D
 var difficulty_name: String = "EASY"
@@ -167,15 +167,22 @@ func make_button(label: String, rect: Rect2, action: Callable) -> Button:
 	return button
 
 func bind_world(country: CountryMap, territories: TerritoryManager, characters: Array[ConquerCharacter], view: Camera2D) -> void:
-	if is_instance_valid(territory) and territory.mesh_published.is_connected(queue_redraw):
-		territory.mesh_published.disconnect(queue_redraw)
+	if is_instance_valid(territory) and territory.mesh_published.is_connected(_refresh_minimap):
+		territory.mesh_published.disconnect(_refresh_minimap)
 	map = country
 	territory = territories
-	territory.mesh_published.connect(queue_redraw)
+	minimap_projection = minimap_transform()
+	minimap_land_mesh = minimap_mesh(minimap_projection*map.outline,IslandGeometry.triangles_cached(map.outline))
+	territory.mesh_published.connect(_refresh_minimap)
+	if minimap_static == null:
+		minimap_static = Node2D.new()
+		minimap_static.draw.connect(func() -> void: _minimap(minimap_static))
+		add_child(minimap_static)
 	if minimap_motion == null:
 		minimap_motion = Node2D.new()
 		minimap_motion.draw.connect(_draw_minimap_motion)
 		add_child(minimap_motion)
+	_refresh_minimap()
 	actors = characters
 	camera = view
 	country_banner.set_country(country,"WORLD CONQUEST")
@@ -194,6 +201,7 @@ func set_mode(value: String, winning_team: int = -1) -> void:
 		popup_tween = create_tween()
 		popup_tween.tween_property(self,"modulate:a",1.0,0.16).set_trans(Tween.TRANS_SINE)
 	mode = value
+	if is_instance_valid(minimap_static): minimap_static.visible = value == "playing"
 	if is_instance_valid(minimap_motion): minimap_motion.visible = value == "playing"
 	winner = winning_team
 	visible = value != "selection" and value != "loading"
@@ -256,33 +264,40 @@ func minimap_transform() -> Transform2D:
 	var factor: float = minf(rect.size.x / map.land_bounds.size.x, rect.size.y / map.land_bounds.size.y)
 	return Transform2D(0, Vector2.ONE * factor, 0, rect.get_center() - map.land_bounds.get_center() * factor)
 
-func _minimap() -> void:
+func _refresh_minimap() -> void:
+	if is_instance_valid(minimap_static): minimap_static.queue_redraw()
+	if mode != "playing": queue_redraw()
+
+func _minimap(canvas: CanvasItem) -> void:
 	var began := WorkMetrics.start()
-	draw_style_box(box(ConquestTheme.PANEL), Rect2(522, 260, 174, 219))
-	text("COUNTRY MAP", Vector2(609, 283), 12, Color("c9ecf0"), true)
-	var transform: Transform2D = minimap_transform()
-	var outline_hash: int = hash([map.outline,transform])
-	if minimap_outline_hash != outline_hash:
-		minimap_outline_hash = outline_hash
-		minimap_land = transform*map.outline
-		minimap_land_mesh = minimap_mesh(minimap_land,Geometry2D.triangulate_polygon(map.outline))
-	if minimap_land_mesh != null: draw_mesh(minimap_land_mesh,null,Transform2D.IDENTITY,Color("dfcea1"))
+	canvas.draw_style_box(box(ConquestTheme.PANEL), Rect2(522,260,174,219))
+	_minimap_text(canvas,"COUNTRY MAP",283,12,Color("c9ecf0"))
+	if minimap_land_mesh != null: canvas.draw_mesh(minimap_land_mesh,null,Transform2D.IDENTITY,Color("dfcea1"))
 	var snapshot: Array = territory.render_snapshot()
 	for team in snapshot.size():
 		for piece in snapshot[team].pieces:
-			if not piece.indices.is_empty(): draw_mesh(piece.mesh,null,transform,config.team_colors[team])
-	text(actor_name(0), Vector2(609, 467), 11, Color("dcc2ff"), true)
+			if not piece.indices.is_empty(): canvas.draw_mesh(piece.mesh,null,minimap_projection,config.team_colors[team])
+	_minimap_text(canvas,actor_name(0),467,11,Color("dcc2ff"))
 	WorkMetrics.finish("minimap",began)
+
+func _minimap_text(canvas: CanvasItem, value: String, height: float, pixels: int, tint: Color) -> void:
+	var left := 609.0-font.get_string_size(value,HORIZONTAL_ALIGNMENT_LEFT,-1,pixels).x*0.5
+	canvas.draw_string(font,Vector2(left,height),value,HORIZONTAL_ALIGNMENT_LEFT,-1,pixels,tint)
 
 func _draw_minimap_motion() -> void:
 	if map == null or not is_instance_valid(territory): return
-	var transform := minimap_transform()
+	var transform := minimap_projection
 	if is_instance_valid(camera):
 		var frame := minimap_camera_polygon()
-		var clip := PackedVector2Array([Vector2(539,289),Vector2(679,289),Vector2(679,453),Vector2(539,453)])
-		for piece in Geometry2D.intersect_polygons(frame,clip):
-			piece.append(piece[0])
-			minimap_motion.draw_polyline(piece,Color(0.85,1,1,0.65),1,true)
+		var clip_rect := Rect2(539,289,140,164)
+		if is_equal_approx(frame[0].y,frame[1].y) and is_equal_approx(frame[0].x,frame[3].x):
+			var visible_frame := Rect2(frame[0],frame[2]-frame[0]).abs().intersection(clip_rect)
+			if visible_frame.has_area(): minimap_motion.draw_rect(visible_frame,Color(0.85,1,1,0.65),false,1,true)
+		else:
+			var clip := PackedVector2Array([clip_rect.position,Vector2(679,289),clip_rect.end,Vector2(539,453)])
+			for piece in Geometry2D.intersect_polygons(frame,clip):
+				piece.append(piece[0])
+				minimap_motion.draw_polyline(piece,Color(0.85,1,1,0.65),1,true)
 	for actor in actors:
 		if not actor.active:
 			continue
@@ -319,7 +334,7 @@ func _draw() -> void:
 	var remaining: int = actors.filter(func(a: ConquerCharacter) -> bool: return a.team > 0 and a.active).size()
 	text(difficulty_name,Vector2(476,176),16,ConquestTheme.GOLD)
 	text("%d RIVALS LEFT" % remaining,Vector2(476,217),16)
-	_minimap()
+	if mode != "playing": _minimap(self)
 	draw_style_box(box(Color(0.015, 0.20, 0.31, 0.82)), Rect2(65, 1165, 590, 66))
 	text("TOUCH AND HOLD TO MOVE", Vector2(360, 1191), 17, Color("e3d0ff"), true)
 	text("Release to stop. Return to your land to claim area.", Vector2(360, 1216), 15, Color("d4f0f0"), true)

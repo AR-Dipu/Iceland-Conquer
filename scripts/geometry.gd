@@ -164,26 +164,28 @@ static func face_area(poly: PackedVector2Array) -> float:
 
 static func split_faces(poly: PackedVector2Array, depth: int = 0) -> Array[PackedVector2Array]:
 	if depth > 64 or poly.size() < 3: return []
-	# Keep the original i/j resolution order while avoiding all-pairs native
-	# intersection calls on long sampled contours. Broad-phase buckets include
-	# endpoints and a tolerance; the exact segment predicate remains unchanged.
-	var buckets: Dictionary = {}
+	# Find overlapping bounds in a sweep, then test intersections in the
+	# original index order so precision and face splitting stay deterministic.
 	var peers: Array = []
-	for i in poly.size(): peers.append({})
-	for j in poly.size():
-		var a: Vector2 = poly[j]
-		var b: Vector2 = poly[(j+1)%poly.size()]
-		var lo := Vector2i(floori((minf(a.x,b.x)-0.001)/128),floori((minf(a.y,b.y)-0.001)/128))
-		var hi := Vector2i(floori((maxf(a.x,b.x)+0.001)/128),floori((maxf(a.y,b.y)+0.001)/128))
-		for x in range(lo.x,hi.x+1):
-			for y in range(lo.y,hi.y+1):
-				var key := Vector2i(x,y)
-				for i in buckets.get(key,[]):
-					if j >= i+2: peers[i][j] = true
-				if not buckets.has(key): buckets[key] = []
-				buckets[key].append(j)
+	var order: Array[int] = []
+	var boxes: Array[Rect2] = []
 	for i in poly.size():
-		var candidates: Array = peers[i].keys()
+		var a := poly[i]
+		var b := poly[(i+1)%poly.size()]
+		boxes.append(Rect2(a.min(b), (a-b).abs()).grow(0.001))
+		peers.append([])
+		order.append(i)
+	order.sort_custom(func(a: int,b: int) -> bool: return boxes[a].position.x < boxes[b].position.x)
+	for cursor in order.size():
+		var a := order[cursor]
+		var box := boxes[a]
+		for next in range(cursor+1,order.size()):
+			var b := order[next]
+			if boxes[b].position.x > box.end.x: break
+			if absi(a-b) <= 1 or not box.intersects(boxes[b],true): continue
+			peers[mini(a,b)].append(maxi(a,b))
+	for i in poly.size():
+		var candidates: Array = peers[i]
 		candidates.sort()
 		for j in candidates:
 			if i == 0 and j == poly.size()-1: continue

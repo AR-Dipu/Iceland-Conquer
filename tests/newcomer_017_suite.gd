@@ -27,11 +27,11 @@ func run() -> void:
 			for q in game.territory.regions[team]: assert(Geometry2D.intersect_polygons(p,q).is_empty())
 	game.eliminate_bot(2)
 	var count_before: int = game.actors.size()
-	game.arrival_elapsed = 29.8
+	game.arrival_elapsed = 19.8
 	game._physics_process(0.1)
 	assert(game.actors.size() == count_before and not game.actors[2].active,"No early arrival")
 	game._physics_process(0.2)
-	assert(game.actors.size() == count_before and game.actors[2].active,"Arrival at 30 active seconds")
+	assert(game.actors.size() == count_before and game.actors[2].active,"Arrival at 20 active seconds")
 	game.pause_round()
 	var elapsed: float = game.arrival_elapsed
 	game._physics_process(60)

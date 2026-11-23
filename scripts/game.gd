@@ -45,6 +45,8 @@ var match_character := "cat"
 var arrival_elapsed: float = 0
 var newcomer_serial := 0
 var trail_echoes: Array[Line2D] = []
+var pacing_fixture := false
+var pacing_revives := 0
 var telemetry := RoundTelemetry.new()
 var ocean: TropicalOcean
 var internal_preview: Dictionary = {}
@@ -135,6 +137,8 @@ func _apply_internal_preview() -> void:
 	selected_country = id
 	difficulty = clampi(int(internal_preview.get("difficulty",2)),0,2)
 	selector.difficulty(difficulty)
+	pacing_fixture = bool(internal_preview.get("pacing_fixture",false))
+	if pacing_fixture: seed(int(internal_preview.get("seed",116)))
 	var mode := str(internal_preview.get("mode","selection"))
 	if mode == "shop":
 		selector.open_shop()
@@ -153,12 +157,13 @@ func _apply_internal_preview() -> void:
 	if internal_preview.get("metrics",false) and state == State.PLAYING:
 		WorkMetrics.samples.clear()
 		WorkMetrics.enabled = true
-		get_tree().create_timer(11.0).timeout.connect(_report_preview_metrics)
+		get_tree().create_timer(37.0 if pacing_fixture else 11.0).timeout.connect(_report_preview_metrics)
 	print("INTERNAL_PREVIEW ",mode," ",id)
 
 func _report_preview_metrics() -> void:
 	print("INTERNAL_CAPTURE_VISIBILITY ",JSON.stringify({
-		"state":state,"visible_delays":territory.visible_delays if is_instance_valid(territory) else []
+		"state":state,"active_seconds":active_seconds,"fixture_revives":pacing_revives,
+		"visible_delays":territory.visible_delays if is_instance_valid(territory) else []
 	}))
 	var phases := WorkMetrics.report()
 	for phase in phases:
@@ -230,7 +235,7 @@ func _set_state(next: State) -> void:
 		world_root.process_mode = Node.PROCESS_MODE_INHERIT if state == State.PLAYING else Node.PROCESS_MODE_DISABLED
 	for actor in actors:
 		actor.velocity = Vector2.ZERO
-		actor.previous = actor.position
+		actor.snap_visual()
 		actor.movement_path = PackedVector2Array([actor.position])
 
 func _clear_world() -> void:
@@ -310,12 +315,11 @@ func load_country(country_id: String) -> bool:
 		label.add_theme_color_override("font_shadow_color", Color("123f5d"))
 		label.add_theme_constant_override("shadow_offset_x", 2)
 		label.add_theme_constant_override("shadow_offset_y", 2)
-		actor.add_child(label)
+		actor.visual.add_child(label)
 	hud.player_names = player_names
 	camera = Camera2D.new()
 	camera.name = "FollowCamera"
-	camera.position_smoothing_enabled = true
-	camera.position_smoothing_speed = 8.0
+	camera.position_smoothing_enabled = false
 	camera.zoom = Vector2.ONE * 0.9
 	camera.limit_left = floori(current_map.camera_bounds.position.x)
 	camera.limit_top = floori(current_map.camera_bounds.position.y)
@@ -390,7 +394,7 @@ func _physics_process(delta: float) -> void:
 	if state != State.PLAYING:
 		return
 	territory.begin_planning_frame()
-	arrival_elapsed += delta
+	var vacancy_at_start := _has_rival_vacancy()
 	for actor in actors:
 		if not actor.active:
 			continue
@@ -422,23 +426,33 @@ func _physics_process(delta: float) -> void:
 		_update_trail(actor)
 		if state != State.PLAYING:
 			return
-	camera.position = actors[0].position + Vector2(0, -90)
 	_check_victory(0)
-	if state == State.PLAYING and arrival_elapsed >= 30:
-		arrival_elapsed = fmod(arrival_elapsed,30)
+	if state == State.PLAYING:
+		_tick_refills(delta if vacancy_at_start else 0.0)
+
+func _has_rival_vacancy() -> bool:
+	for actor in actors:
+		if actor.team > 0 and not actor.active: return true
+	return false
+
+func _tick_refills(delta: float) -> void:
+	if not _has_rival_vacancy():
+		arrival_elapsed = 0.0
+		return
+	arrival_elapsed += delta
+	if arrival_elapsed >= 20.0:
+		arrival_elapsed = 0.0
 		try_newcomer()
 
 func try_newcomer() -> bool:
 	if state != State.PLAYING: return false
-	var active: int = 0
 	var team := -1
 	var used: Array[int] = []
 	for actor in actors:
 		if actor.active:
 			used.append(config.cat_indices[actor.team])
-			if actor.team > 0: active += 1
 		elif actor.team > 0 and team < 0: team = actor.team
-	if active > [2,3,4][difficulty] or team < 0: return false
+	if team < 0: return false
 	var spawn := Vector2.ZERO
 	var patch := PackedVector2Array()
 	for attempt in 80:
@@ -497,7 +511,7 @@ func try_newcomer() -> bool:
 	label.size.x = 130
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.add_theme_font_override("font",hud.font)
-	actor.add_child(label)
+	actor.visual.add_child(label)
 	territory._update_fractions()
 	hud.show_toast(name.to_upper()+" ENTERS THE BATTLE!")
 	return true
@@ -510,19 +524,14 @@ func _resolve_attacks() -> void:
 			continue
 		if attacker.previous.distance_squared_to(attacker.position) < 0.001:
 			continue
+		var path := _actor_path(attacker)
 		for victim in actors:
-			if not victim.active or victim.protection > 0 or victim.trail.points.size() < 2:
-				continue
-			if attacker == victim:
-				continue
-			else:
-				var path := _actor_path(attacker)
-				for i in path.size()-1:
-					if victim.trail.hits(path[i],path[i+1],config.trail_hit_radius):
-						if not defeated.has(victim.team):
-							defeated.append(victim.team)
-							killers[victim.team] = attacker.team
-						break
+			if attacker == victim or not victim.active or victim.protection > 0 or victim.trail.points.size() < 2 or killers.has(victim.team): continue
+			for i in path.size()-1:
+				if victim.trail.hits(path[i],path[i+1],config.trail_hit_radius):
+					defeated.append(victim.team)
+					killers[victim.team] = attacker.team
+					break
 	defeated.sort()
 	for team in defeated:
 		if team > 0:
@@ -537,6 +546,10 @@ func _defeat_player(attacker: int, method: String) -> void:
 	_dissolve_trail(actors[0])
 	actors[0].trail.clear()
 	hud.play_event("defeat")
+	if pacing_fixture:
+		pacing_revives += 1
+		_revive_player()
+		return
 	_set_state(State.DEFEATED)
 
 func _home_entry(actor: ConquerCharacter) -> float:
@@ -737,6 +750,8 @@ func _notification(what: int) -> void:
 func _process(delta: float) -> void:
 	if not running:
 		return
+	if is_instance_valid(camera) and not actors.is_empty():
+		camera.position = actors[0].visual_world_position() + Vector2(0, -90)
 	active_seconds += delta
 	for popup in popups:
 		popup.life -= delta
@@ -828,7 +843,9 @@ func _revive_player() -> void:
 			distance = candidate.distance_to(actor.position)
 			safe = candidate
 	actor.position = safe
-	actor.previous = safe
+	actor.snap_visual()
+	camera.position = safe + Vector2(0, -90)
+	camera.force_update_scroll()
 	actor.movement_path = PackedVector2Array([safe])
 	actor.trail.clear()
 	actor.protection = wallet.settings.shield_seconds + actor.revival_shield_bonus
@@ -836,7 +853,11 @@ func _revive_player() -> void:
 	hud.play_event("revive")
 	home_points[0] = safe
 	home_regions[0] = territory.region_at(0, safe)
-	_set_state(State.PLAYING)
+	if state == State.PLAYING:
+		hud.mobile.release()
+		actor.velocity = Vector2.ZERO
+	else:
+		_set_state(State.PLAYING)
 
 func _revival_land() -> Array:
 	if not territory.regions[0].is_empty(): return territory.regions[0]

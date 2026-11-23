@@ -36,7 +36,7 @@ func run() -> void:
 	assert(game.running)
 	territory.regions[0] = [territory.island]
 	territory._update_fractions()
-	game.arrival_elapsed = 30.0
+	game.arrival_elapsed = 20.0
 	game._physics_process(1.0/60)
 	assert(game.state == game.State.ROUND_OVER and game.winning_team == 0 and game.newcomer_serial == 0)
 	game.campaign.conquered.clear()

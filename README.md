@@ -1,5 +1,9 @@
 # Country Conquer 0.1.15
 
+## 0.1.17 — Flag terrain and rival refills
+
+The [signed Android candidate](builds/android/country-conquer-v0.1.17.apk) adds offline flag terrain, interpolated character and camera motion, softened display outlines, and 20-active-second rival refills. See [verification and flag provenance](docs/UPDATE-0.1.17.md).
+
 Version code 16. The arcade update adds 12 playable appearances, a scrollable shop, country replay, and match-specific reward reporting. See [0.1.15 verification](docs/UPDATE-0.1.15.md) and the [signed Android candidate](builds/android/country-conquer-v0.1.15.apk).
 
 Version code 14. [Android candidate APK](builds/android/country-conquer-v0.1.13.apk). The illustrated atlas adds an animal character shop, passive abilities, and a gesture-only campaign map. Capture topology prepares intersections during excursions, and the battle map and minimap reuse the same territory meshes. See [0.1.13 verification](docs/UPDATE-0.1.13.md) for benchmark gates and device limits.
@@ -29,3 +33,4 @@ A cut tail opens free restart, Home, coin revival, and demo revival. The ad is e
 Run focused checks with Godot --headless --path . --script res://tests/revive_suite.gd. See docs/UPDATE-0.1.2.md and docs/test-results-0.1.2.log.
 
 Country outlines are bundled offline from Natural Earth; pinned sources are in assets/maps/provenance.json and japan-provenance.json. Art uses the built-in imagegen workflow; generated sprite and icon assets live in assets/characters and assets/icons.
+
