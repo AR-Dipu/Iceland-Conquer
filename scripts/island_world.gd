@@ -63,7 +63,7 @@ func _draw() -> void:
 	for border in context.borders:
 		if border.size() > 1: draw_polyline(border,Color("9b9a76"),42,true)
 	for mesh in decorative_meshes: draw_mesh(mesh,null,Transform2D.IDENTITY,Color("c7c297"))
-	draw_mesh(land_mesh,null,Transform2D.IDENTITY,Color("dfcea1"))
+	draw_mesh(land_mesh,null,Transform2D.IDENTITY,Color("c8df92"))
 	if not waves.is_empty(): draw_multiline(waves,Color("83a9a4"),1.3,true)
 	if not relief.is_empty(): draw_multiline(relief,Color(0.42,0.34,0.20,0.24),1.25,true)
 	for coast in context.coasts:

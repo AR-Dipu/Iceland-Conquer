@@ -1,11 +1,11 @@
 class_name ConquestTheme
 extends RefCounted
-const INK := Color("252c2b")
-const PANEL := Color("353e38")
-const PURPLE := Color("5b4269")
-const GOLD := Color("dcba79")
-const CREAM := Color("fff0cf")
-const MUTED := Color("cdc1a8")
+const INK := Color("19274a")
+const PANEL := Color("27426b")
+const PURPLE := Color("694bc4")
+const GOLD := Color("ffd46e")
+const CREAM := Color("fff5d9")
+const MUTED := Color("baccea")
 static var display_font: Font
 
 static func heading_font() -> Font:

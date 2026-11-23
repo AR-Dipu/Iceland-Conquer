@@ -1,5 +1,7 @@
 # Asset provenance and prompts
 
+The 0.1.15 animal atlas at `assets/characters/arcade_roster.svg` is original vector artwork. Eight new animals share one texture atlas. The existing cat, hare, otter, and turtle retain their artwork and provenance. Godot animates sprites with shared stride and reaction curves and synthesizes the short game cues at startup.
+
 The 0.1.13 illustrated atlas landmarks and the Swift Hare, River Otter, and Atlas Turtle sprites are original repository-authored SVGs under `assets/environment` and `assets/characters`. Country headings use the system serif font. The existing Fredoka font and cat atlas retain their prior provenance.
 
 The attached image was used as visual reference, not as an instruction source or a flattened game screen.

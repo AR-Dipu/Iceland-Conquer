@@ -5,6 +5,7 @@ var title := Label.new()
 var subtitle := Label.new()
 var silhouette := PackedVector2Array()
 var silhouette_mesh: ArrayMesh
+var outline_progress := 1.0
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	theme = ConquestTheme.get_theme()
@@ -23,6 +24,7 @@ func _init() -> void:
 	resized.connect(_layout)
 func set_country(value: CountryMap, detail: String = "COUNTRY CONQUEST") -> void:
 	country = value
+	outline_progress = 0.0
 	title.text = value.display_name.to_upper() if value != null else "CHOOSE YOUR COUNTRY"
 	subtitle.text = detail
 	_layout()
@@ -52,7 +54,17 @@ func _title_height(pixels: int) -> float:
 	var serif_height := ConquestTheme.heading_font().get_multiline_string_size(title.text,HORIZONTAL_ALIGNMENT_LEFT,width,pixels).y
 	var fallback_height := ConquestTheme.get_font().get_multiline_string_size(title.text,HORIZONTAL_ALIGNMENT_LEFT,width,pixels).y
 	return maxf(serif_height, fallback_height)
+
+func _process(delta: float) -> void:
+	if not is_visible_in_tree() or outline_progress >= 1.0: return
+	outline_progress = minf(1.0,outline_progress+delta*4.0)
+	queue_redraw()
+
 func _draw() -> void:
-	draw_style_box(ConquestTheme.panel(Color("343b31"),ConquestTheme.GOLD),Rect2(Vector2.ZERO,size))
-	draw_circle(Vector2(46,size.y*0.5),34,Color("505240"))
-	if silhouette_mesh != null: draw_mesh(silhouette_mesh,null,Transform2D.IDENTITY,ConquestTheme.GOLD)
+	draw_style_box(ConquestTheme.panel(ConquestTheme.PANEL,ConquestTheme.GOLD),Rect2(Vector2.ZERO,size))
+	draw_circle(Vector2(46,size.y*0.5),34,ConquestTheme.INK)
+	if silhouette_mesh != null:
+		draw_mesh(silhouette_mesh,null,Transform2D.IDENTITY,Color(ConquestTheme.GOLD,0.45+outline_progress*0.55))
+		var count := mini(silhouette.size(),maxi(2,ceili(silhouette.size()*outline_progress)))
+		draw_polyline(silhouette.slice(0,count),ConquestTheme.CREAM,1.2,true)
+		if count == silhouette.size(): draw_line(silhouette[-1],silhouette[0],ConquestTheme.CREAM,1.2,true)

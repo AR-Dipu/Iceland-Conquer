@@ -128,6 +128,10 @@ var staged_meshes: Array = []
 var staged_organic: Dictionary = {}
 var staged_hashes: Dictionary = {}
 var mesh_jobs: Array[int] = []
+var mesh_work: Dictionary = {}
+var effect_pool: Array[MeshInstance2D] = []
+var capture_frames: Array[int] = []
+var visible_delays: Array[int] = []
 var staged_revision: int = -1
 var fill_cache: Dictionary = {}
 var last_enclosed_faces: Array = []
@@ -151,27 +155,45 @@ func _start_mesh_build() -> void:
 	staged_organic = organic_cache.duplicate()
 	staged_hashes = mesh_hashes.duplicate()
 	mesh_jobs.clear()
+	mesh_work.clear()
 	for team in regions.size():
 		if staged_hashes.get(team,-1) != hash(regions[team]): mesh_jobs.append(team)
 
-func _build_team_mesh(team: int) -> void:
-	var fingerprint: int = hash(regions[team])
-	var pieces: Array = []
-	var edges := PackedVector2Array()
-	for p in regions[team]:
-		var indices := IslandGeometry.triangles_cached(p)
-		var mesh := _fill_mesh(p,indices)
-		pieces.append({"polygon":p,"indices":indices,"mesh":mesh})
-		for i in p.size():
-			var a: Vector2 = p[i]
-			var b: Vector2 = p[(i+1)%p.size()]
-			var normal := Vector2(-(b-a).y,(b-a).x).normalized()*0.5
-			var mid: Vector2 = (a+b)*0.5
-			if owned(team,mid+normal) and owned(team,mid-normal): continue
+func _step_team_mesh(team: int) -> bool:
+	if mesh_work.is_empty():
+		var bounds: Array[Rect2] = []
+		for polygon in regions[team]: bounds.append(IslandGeometry.bounds(polygon).grow(0.51))
+		mesh_work = {"polygon":0,"edge":0,"pieces":[],"edges":PackedVector2Array(),"bounds":bounds}
+	var index: int = mesh_work.polygon
+	if index >= regions[team].size():
+		staged_meshes[team] = {"pieces":mesh_work.pieces,"edges":mesh_work.edges}
+		staged_hashes[team] = hash(regions[team])
+		mesh_work.clear()
+		return true
+	var polygon: PackedVector2Array = regions[team][index]
+	var offset: int = mesh_work.edge
+	if offset == 0:
+		var indices := IslandGeometry.triangles_cached(polygon)
+		mesh_work.pieces.append({"polygon":polygon,"indices":indices,"mesh":_fill_mesh(polygon,indices)})
+	var edges: PackedVector2Array = mesh_work.edges
+	var stop := mini(offset+32,polygon.size())
+	for i in range(offset,stop):
+		var a := polygon[i]
+		var b := polygon[(i+1)%polygon.size()]
+		var mid := (a+b)*0.5
+		var shared := false
+		for neighbor in mesh_work.bounds.size():
+			if neighbor != index and mesh_work.bounds[neighbor].has_point(mid):
+				var normal := (b-a).orthogonal().normalized()*0.5
+				shared = owned(team,mid+normal) and owned(team,mid-normal)
+				break
+		if not shared:
 			edges.append(a)
 			edges.append(b)
-	staged_meshes[team] = {"pieces":pieces,"edges":edges}
-	staged_hashes[team] = fingerprint
+	mesh_work.edges = edges
+	mesh_work.edge = 0 if stop == polygon.size() else stop
+	if stop == polygon.size(): mesh_work.polygon += 1
+	return false
 
 func _fill_mesh(polygon: PackedVector2Array, indices: PackedInt32Array) -> ArrayMesh:
 	var key := hash(polygon)
@@ -189,12 +211,20 @@ func _publish_meshes() -> void:
 	mesh_revision = staged_revision
 	queue_redraw()
 	mesh_published.emit()
+	if WorkMetrics.enabled and not capture_frames.is_empty():
+		var submitted := capture_frames.duplicate()
+		capture_frames.clear()
+		RenderingServer.frame_post_draw.connect(func() -> void:
+			for frame_id in submitted:
+				visible_delays.append(maxi(1,Engine.get_frames_drawn()-frame_id+1))
+		,CONNECT_ONE_SHOT)
 
 func mesh_snapshot() -> Array:
 	if mesh_revision == revision: return mesh_teams
 	var began := WorkMetrics.start()
 	if staged_revision != revision: _start_mesh_build()
-	while not mesh_jobs.is_empty(): _build_team_mesh(mesh_jobs.pop_front())
+	while not mesh_jobs.is_empty():
+		if _step_team_mesh(mesh_jobs[0]): mesh_jobs.pop_front()
 	_publish_meshes()
 	WorkMetrics.finish("mesh_upload",began)
 	return mesh_teams
@@ -209,7 +239,7 @@ func _pump_meshes() -> void:
 	var began := WorkMetrics.start()
 	var deadline := Time.get_ticks_usec()+2000
 	while not mesh_jobs.is_empty():
-		_build_team_mesh(mesh_jobs.pop_front())
+		if _step_team_mesh(mesh_jobs[0]): mesh_jobs.pop_front()
 		if Time.get_ticks_usec() >= deadline: break
 	if mesh_jobs.is_empty(): _publish_meshes()
 	WorkMetrics.finish("mesh_upload",began)
@@ -362,6 +392,7 @@ func setup(settings: GameConfig, country: CountryMap) -> void:
 	island_area = IslandGeometry.area(island)
 	initial = country.initial_territories.duplicate(true)
 	fractions.resize(initial.size())
+	if capture_effects == null: _prepare_effect_pool()
 	reset_all()
 
 func typed(polys: Array) -> Array[PackedVector2Array]:
@@ -450,7 +481,7 @@ func _capture_transaction(team: int, trail: PackedVector2Array, departure: Packe
 		flashes.append({"polygon":addition,"life":0.45,"team":team,"origin":trail[-1]})
 		if flashes.size() > 12:
 			var old: Dictionary = flashes.pop_front()
-			if is_instance_valid(old.get("node")): old.node.queue_free()
+			_release_effect(old)
 	var merge_began := WorkMetrics.start()
 	regions[team] = IslandGeometry.merge_regions(typed(regions[team]))
 	WorkMetrics.finish("capture_merge",merge_began)
@@ -473,6 +504,7 @@ func _capture_transaction(team: int, trail: PackedVector2Array, departure: Packe
 
 	_update_fractions()
 	if fractions[team] > before + 0.0001:
+		if WorkMetrics.enabled and DisplayServer.get_name() != "headless": capture_frames.append(Engine.get_frames_drawn())
 		last_enclosed_faces = preview.get("enclosed_faces", [])
 		last_enclosed_pieces = enclosed_additions
 		last_enclosed_previous = snapshot[team]
@@ -505,35 +537,53 @@ func _process(delta: float) -> void:
 	if mesh_revision != revision: return
 	if flashes.is_empty():
 		return
-	if not is_instance_valid(capture_effects):
-		capture_effects = Node2D.new()
-		capture_effects.z_index = 1
-		add_child(capture_effects)
+	var started := 0
 	for flash in flashes:
+		if not flash.has("node"):
+			if started >= 2 or effect_pool.is_empty(): continue
+			_upload_effect(flash)
+			started += 1
 		flash.life -= delta
 		if flash.life <= 0:
-			if is_instance_valid(flash.get("node")): flash.node.queue_free()
+			_release_effect(flash)
 			continue
-		if not flash.has("node"): _upload_effect(flash)
 		flash.node.material.set_shader_parameter("progress",1-float(flash.life)/0.45)
 	flashes = flashes.filter(func(f: Dictionary) -> bool: return f.life > 0.0)
 
 func _clear_flashes() -> void:
-	for flash in flashes:
-		if is_instance_valid(flash.get("node")): flash.node.queue_free()
+	for flash in flashes: _release_effect(flash)
 	flashes.clear()
+
+func _release_effect(flash: Dictionary) -> void:
+	if not is_instance_valid(flash.get("node")): return
+	var instance: MeshInstance2D = flash.node
+	instance.hide()
+	instance.mesh = null
+	effect_pool.append(instance)
+	flash.erase("node")
+
+func _prepare_effect_pool() -> void:
+	capture_effects = Node2D.new()
+	capture_effects.z_index = 1
+	add_child(capture_effects)
+	for i in 6:
+		var instance := MeshInstance2D.new()
+		var material := ShaderMaterial.new()
+		material.shader = preload("res://assets/shaders/capture_reveal.gdshader")
+		instance.material = material
+		instance.hide()
+		capture_effects.add_child(instance)
+		effect_pool.append(instance)
 
 func _upload_effect(flash: Dictionary) -> void:
 	var began := WorkMetrics.start()
-	var instance := MeshInstance2D.new()
+	var instance: MeshInstance2D = effect_pool.pop_back()
 	instance.mesh = _fill_mesh(flash.polygon,IslandGeometry.triangles_cached(flash.polygon))
-	var material := ShaderMaterial.new()
-	material.shader = preload("res://assets/shaders/capture_reveal.gdshader")
+	var material: ShaderMaterial = instance.material
 	material.set_shader_parameter("tint",config.team_colors[flash.team].lightened(0.65))
 	material.set_shader_parameter("origin",flash.origin)
 	material.set_shader_parameter("radius",maxf(1,IslandGeometry.bounds(flash.polygon).size.length()))
-	instance.material = material
-	capture_effects.add_child(instance)
+	instance.show()
 	flash.node = instance
 	WorkMetrics.finish("effect_upload",began)
 

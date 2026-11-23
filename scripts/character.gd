@@ -17,15 +17,26 @@ const Collection = preload("res://scripts/character_collection.gd")
 var speed_multiplier := 1.0
 var acceleration_multiplier := 1.0
 var revival_shield_bonus := 0.0
+var appearance_id := "cat"
+var pose_time := 0.0
+var pose := ""
+var art_scale := 1.0
 
 func apply_character(id: String) -> void:
-	if team != 0 or id == "cat" or not Collection.CATALOG.has(id): return
+	if not Collection.CATALOG.has(id): return
 	var entry: Array = Collection.CATALOG[id]
-	speed_multiplier = entry[4]
-	acceleration_multiplier = entry[5]
-	revival_shield_bonus = entry[6]
+	if team == 0:
+		speed_multiplier = entry[4]
+		acceleration_multiplier = entry[5]
+		revival_shield_bonus = entry[6]
+	appearance_id = id
 	sprite.texture = Collection.artwork(id)
-	sprite.scale = Vector2.ONE * (86.0 / float(sprite.texture.get_width()))
+	art_scale = 94.0 / float(sprite.texture.get_width())
+	sprite.scale = Vector2.ONE * art_scale
+
+func react(event: String) -> void:
+	pose = event
+	pose_time = 0.32
 
 func movement_speed() -> float:
 	return config.player_speed * speed_multiplier if team == 0 else config.bot_speed
@@ -49,6 +60,7 @@ func setup(index: int, settings: GameConfig) -> void:
 	texture.region = Rect2(Vector2(cat_index % 4 * cell, cat_index / 4 * atlas.get_height() / 2), Vector2(cell, atlas.get_height() / 2))
 	sprite.texture = texture
 	sprite.scale = Vector2.ONE * (94.0 / float(sprite.texture.get_width()))
+	art_scale = sprite.scale.x
 	sprite.position.y = -34.0
 	add_child(sprite)
 
@@ -73,7 +85,15 @@ func advance(direction: Vector2, delta: float, island: PackedVector2Array) -> vo
 		heading = velocity.normalized()
 	clock += delta
 	protection = maxf(0.0, protection - delta)
-	sprite.position.y = -34.0 + sin(clock * (10.0 if velocity.length() > 10.0 else 3.0) + team) * (2.2 if velocity.length() > 10.0 else 1.1)
+	pose_time = maxf(0.0,pose_time-delta)
+	var moving := velocity.length_squared() > 100
+	var stride := sin(clock * (16.0 if moving else 3.0) + team)
+	var reaction := sin(PI*pose_time/0.32)
+	var lift := reaction * (11.0 if pose == "capture" else 8.0)
+	sprite.position.y = -34.0 - lift - (absf(stride)*6.0 if moving else stride*1.8)
+	var squash := stride*0.05 if moving else stride*0.02
+	sprite.scale = Vector2(1.0-squash,1.0+squash+reaction*0.12)*art_scale
+	if absf(heading.x) > 0.2: sprite.flip_h = heading.x < 0
 	sprite.rotation = lerpf(sprite.rotation, heading.x * 0.09, 0.12)
 	sprite.modulate.a = 0.6 + 0.4 * absf(sin(clock * 9.0)) if protection > 0.0 else 1.0
 	if protection > 0 or was_protected: queue_redraw()
@@ -85,3 +105,5 @@ func _draw() -> void:
 	draw_set_transform(Vector2.ZERO)
 	if protection > 0.0:
 		draw_arc(Vector2(0, -12), 41, 0, TAU, 48, Color(1, 1, 1, 0.55), 2.0, true)
+		if pose == "revive" and pose_time > 0.0:
+			draw_arc(Vector2(0,-12),42.0+(1.0-pose_time/0.32)*24.0,0,TAU,32,Color(0.72,0.94,1.0,pose_time/0.32),3,true)

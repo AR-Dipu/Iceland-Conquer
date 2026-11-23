@@ -3,6 +3,40 @@ extends Control
 signal coin_revive_requested
 signal bonus_requested
 var coin_balance: int = 0
+var earned_coins: Dictionary = {}
+var reward_motion := 0.0
+var stamp_motion := 0.0
+var event_audio: AudioStreamPlayer
+var event_sounds: Dictionary = {}
+
+func play_event(event: String) -> void:
+	if DisplayServer.get_name() == "headless": return
+	if not is_instance_valid(event_audio) or not event_sounds.has(event): return
+	event_audio.stream = event_sounds[event]
+	event_audio.play()
+
+func _prepare_event_audio() -> void:
+	event_audio = AudioStreamPlayer.new()
+	event_audio.volume_db = -19
+	add_child(event_audio)
+	var motifs := {"capture":[440,660],"defeat":[349,233],"revive":[330,494,740],"victory":[392,523,659,784]}
+	for key in motifs:
+		var data := PackedByteArray()
+		for note in motifs[key]:
+			for i in 1764:
+				var t := float(i)/22050.0
+				var envelope := minf(1.0,i/100.0)*pow(1.0-i/1764.0,1.4)
+				data.append(int(clampf(128+sin(TAU*note*t)*envelope*42,0,255)))
+		var stream := AudioStreamWAV.new()
+		stream.format = AudioStreamWAV.FORMAT_8_BITS
+		stream.mix_rate = 22050
+		stream.data = data
+		event_sounds[key] = stream
+
+func add_reward(reason: String, amount: int) -> void:
+	earned_coins[reason] = amount
+	reward_motion = 1.0
+	queue_redraw()
 var coin_price: int = 100
 var wallet_ready: bool = false
 var bonus_ready: bool = false
@@ -75,6 +109,7 @@ func setup(settings: GameConfig) -> void:
 	click_audio.stream = tone
 	click_audio.volume_db = -14
 	add_child(click_audio)
+	_prepare_event_audio()
 	font.base_font = preload("res://assets/fonts/Fredoka.ttf")
 	font.variation_opentype = {"wght": 600.0, "wdth": 100.0}
 	font.variation_embolden = 0.6
@@ -152,6 +187,7 @@ func update_scores(values: Array[float]) -> void:
 	queue_redraw()
 
 func set_mode(value: String, winning_team: int = -1) -> void:
+	if value == "round_over" and mode == "playing": stamp_motion = 1.0
 	if popup_tween != null: popup_tween.kill()
 	modulate.a = 0.3 if value in ["defeated","round_over","paused"] else 1.0
 	if modulate.a < 1:
@@ -194,6 +230,12 @@ func show_toast(value: String) -> void:
 	queue_redraw()
 
 func _process(delta: float) -> void:
+	if mode == "round_over" and reward_motion > 0:
+		reward_motion = move_toward(reward_motion,0.0,delta*3.5)
+		queue_redraw()
+	if mode == "round_over" and stamp_motion > 0:
+		stamp_motion = move_toward(stamp_motion,0.0,delta*4.0)
+		queue_redraw()
 	var previous_toast := toast_life
 	toast_life = maxf(0, toast_life - delta)
 	if previous_toast > 0 and toast_life == 0: queue_redraw()
@@ -215,6 +257,7 @@ func minimap_transform() -> Transform2D:
 	return Transform2D(0, Vector2.ONE * factor, 0, rect.get_center() - map.land_bounds.get_center() * factor)
 
 func _minimap() -> void:
+	var began := WorkMetrics.start()
 	draw_style_box(box(ConquestTheme.PANEL), Rect2(522, 260, 174, 219))
 	text("COUNTRY MAP", Vector2(609, 283), 12, Color("c9ecf0"), true)
 	var transform: Transform2D = minimap_transform()
@@ -229,6 +272,7 @@ func _minimap() -> void:
 		for piece in snapshot[team].pieces:
 			if not piece.indices.is_empty(): draw_mesh(piece.mesh,null,transform,config.team_colors[team])
 	text(actor_name(0), Vector2(609, 467), 11, Color("dcc2ff"), true)
+	WorkMetrics.finish("minimap",began)
 
 func _draw_minimap_motion() -> void:
 	if map == null or not is_instance_valid(territory): return
@@ -293,8 +337,22 @@ func _draw() -> void:
 			title = "DEFEATED!"
 		elif mode == "demo_ad":
 			title = "DEMO REWARDED AD"
-		text(title, Vector2(360,422), 31, Color("ffe5a0"), true)
-		text("COINS: %d  |  %s: %d%%" % [coin_balance, actor_name(winner if mode == "round_over" else 0), display_percent(winner if mode == "round_over" else 0)], Vector2(360,466), 20, Color("dcc4ff"), true)
+		var impact := stamp_motion*stamp_motion if mode == "round_over" else 0.0
+		if impact > 0.0:
+			draw_arc(Vector2(360,412),35+impact*45,0,TAU,32,Color(ConquestTheme.GOLD,impact*0.8),2,true)
+		text(title, Vector2(360,422-impact*7), 31+roundi(impact*5), ConquestTheme.GOLD, true)
+		var reward_labels := PackedStringArray()
+		if mode == "round_over" and winner == 0:
+			for reason in earned_coins: reward_labels.append("%s +%d" % [reason,earned_coins[reason]])
+		if mode in ["round_over","defeated"]:
+			text("No coins earned" if reward_labels.is_empty() else "  ·  ".join(reward_labels),Vector2(360,466-reward_motion*9),19,ConquestTheme.GOLD,true)
+			if not reward_labels.is_empty() and reward_motion > 0:
+				for i in 5:
+					var progress := 1.0-reward_motion
+					var point := Vector2(290+i*35,411.0+progress*49)
+					draw_circle(point,3.0+progress*2.0,Color(ConquestTheme.GOLD,reward_motion))
+		else:
+			text("%s · %d%%" % [actor_name(0),display_percent(0)],Vector2(360,466),20,ConquestTheme.CREAM,true)
 		var detail := "MAKE YOUR NEXT MOVE"
 		if mode == "demo_ad": detail = "Demo Ad — no real ad is shown. %ds" % ceili(demo_remaining)
 		elif mode == "defeated" and coin_balance < coin_price: detail = "NEED %d MORE COINS — OR RESTART FREE" % (coin_price-coin_balance)

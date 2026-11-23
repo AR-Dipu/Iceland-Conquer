@@ -12,6 +12,8 @@ var collection: Collection
 var shop: Panel
 var shop_status: Label
 var shop_actions: Dictionary = {}
+var shop_portraits: Array[TextureRect] = []
+var shop_clock := 0.0
 var bonus_button: Button
 var selected: CountryMap
 var font: FontVariation
@@ -105,30 +107,42 @@ func _build_shop() -> void:
 	add_child(shop)
 	_shop_label("Characters", Vector2(34,32), 44).add_theme_font_override("font",ConquestTheme.heading_font())
 	shop_status = _shop_label("", Vector2(34,96), 24)
+	var scroll := ScrollContainer.new()
+	scroll.position = Vector2(24,152)
+	scroll.size = Vector2(672,938)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	shop.add_child(scroll)
+	var list := Control.new()
+	list.mouse_filter = Control.MOUSE_FILTER_PASS
+	list.custom_minimum_size = Vector2(648,Collection.CATALOG.size()*214)
+	scroll.add_child(list)
 	var row := 0
 	for id in Collection.CATALOG:
 		var entry: Array = Collection.CATALOG[id]
-		var y := 158 + row * 225
+		var y := row * 214
 		var card := Panel.new()
-		card.position = Vector2(24,y)
-		card.size = Vector2(672,204)
+		card.mouse_filter = Control.MOUSE_FILTER_PASS
+		card.position = Vector2(0,y)
+		card.size = Vector2(648,204)
 		card.add_theme_stylebox_override("panel", ConquestTheme.panel())
-		shop.add_child(card)
+		list.add_child(card)
 		var portrait := TextureRect.new()
 		portrait.texture = Collection.artwork(id)
 		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		portrait.position = Vector2(42,y+33)
+		portrait.position = Vector2(16,33)
 		portrait.size = Vector2(125,125)
-		shop.add_child(portrait)
-		_shop_label(entry[0], Vector2(178,y+20), 29)
-		_shop_label(entry[2] + "\n" + entry[3], Vector2(178,y+68), 21)
+		portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(portrait)
+		shop_portraits.append(portrait)
+		_shop_label(entry[0], Vector2(150,20), 29,card)
+		_shop_label(entry[2] + "\n" + entry[3], Vector2(150,68), 21,card)
 		var action := Button.new()
-		action.position = Vector2(470,y+38)
-		action.size = Vector2(204,128)
+		action.position = Vector2(434,38)
+		action.size = Vector2(198,136)
 		ConquestTheme.style_button(action,true)
 		action.pressed.connect(func() -> void: _shop_action(id))
-		shop.add_child(action)
+		card.add_child(action)
 		shop_actions[id] = action
 		row += 1
 	var close := Button.new()
@@ -140,12 +154,13 @@ func _build_shop() -> void:
 	shop.add_child(close)
 	shop.hide()
 
-func _shop_label(value: String, at: Vector2, pixels: int) -> Label:
+func _shop_label(value: String, at: Vector2, pixels: int, parent: Control = null) -> Label:
 	var label := Label.new()
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label.text = value
 	label.position = at
 	label.add_theme_font_size_override("font_size", pixels)
-	shop.add_child(label)
+	(parent if parent != null else shop).add_child(label)
 	return label
 
 func open_shop() -> void:
@@ -157,8 +172,7 @@ func open_shop() -> void:
 	_refresh_shop()
 
 func _refresh_shop(message_text: String = "") -> void:
-	shop_status.text = "%d coins" % wallet.balance
-	if not message_text.is_empty(): shop_status.text += "   ·   " + message_text
+	shop_status.text = message_text if not message_text.is_empty() else "Scroll to browse"
 	for id in shop_actions:
 		var action: Button = shop_actions[id]
 		action.disabled = id == collection.equipped
@@ -175,7 +189,7 @@ func _shop_action(id: String) -> void:
 		_refresh_shop("Purchase could not be saved")
 
 func can_play() -> bool:
-	return selected != null and campaign.can_attack(selected.country_id,catalog) and (not campaign.starting.is_empty() or not campaign.conquered.is_empty() or first_choice_made)
+	return selected != null and campaign.can_play(selected.country_id,catalog) and (not campaign.starting.is_empty() or not campaign.conquered.is_empty() or first_choice_made)
 
 func difficulty(value: int) -> void:
 	for i in difficulties.size(): difficulties[i].add_theme_stylebox_override("normal",ConquestTheme.panel(ConquestTheme.PURPLE if i == value else ConquestTheme.PANEL,ConquestTheme.GOLD if i == value else Color("45617e")))
@@ -227,7 +241,7 @@ func select(id: String) -> void:
 	country_selected.emit(id)
 	play_button.disabled = not can_play()
 	bonus_button.visible = wallet != null and wallet.claimed("country:"+id) and not wallet.claimed("bonus:"+id)
-	play_button.text = "CONQUERED" if campaign.conquered.has(id) else "START CONQUEST" if not play_button.disabled else "LOCKED · CONQUER A NEIGHBOR"
+	play_button.text = "REPLAY CONQUEST" if campaign.conquered.has(id) else "START CONQUEST" if not play_button.disabled else "LOCKED · CONQUER A NEIGHBOR"
 	if campaign.starting.is_empty() and campaign.conquered.is_empty(): play_button.text = "CONFIRM CONQUEST" if first_choice_made else "CHOOSE YOUR COUNTRY ON THE MAP"
 	message = ""
 	if play_button.disabled and not campaign.conquered.has(id):
@@ -252,6 +266,11 @@ func button(label: String, rect: Rect2, action: Callable) -> Button:
 
 func _process(delta: float) -> void:
 	pulse += delta
+	if shop != null and shop.visible:
+		shop_clock += delta
+		for i in shop_portraits.size():
+			var portrait := shop_portraits[i]
+			portrait.position.y = 33.0 + sin(shop_clock*3.8+i*0.8)*4.0
 
 func world_point(p: Vector2) -> Vector2:
 	# Mercator projection keeps country shapes recognizable in the taller map.

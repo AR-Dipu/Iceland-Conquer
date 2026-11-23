@@ -1,4 +1,6 @@
-# Country Conquer 0.1.13
+# Country Conquer 0.1.15
+
+Version code 16. The arcade update adds 12 playable appearances, a scrollable shop, country replay, and match-specific reward reporting. See [0.1.15 verification](docs/UPDATE-0.1.15.md) and the [signed Android candidate](builds/android/country-conquer-v0.1.15.apk).
 
 Version code 14. [Android candidate APK](builds/android/country-conquer-v0.1.13.apk). The illustrated atlas adds an animal character shop, passive abilities, and a gesture-only campaign map. Capture topology prepares intersections during excursions, and the battle map and minimap reuse the same territory meshes. See [0.1.13 verification](docs/UPDATE-0.1.13.md) for benchmark gates and device limits.
 

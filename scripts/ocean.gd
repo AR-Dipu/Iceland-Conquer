@@ -11,7 +11,7 @@ func _ready() -> void:
 func set_campaign_mode(value: bool) -> void:
 	campaign_mode = value
 	var gradient := Gradient.new()
-	gradient.colors = PackedColorArray([Color("b3996f"),Color("f5e2bb")]) if value else PackedColorArray([Color("4d7d84"),Color("a8bdb2")])
+	gradient.colors = PackedColorArray([Color("a7c9ee"),Color("f9e1ad")]) if value else PackedColorArray([Color("307eaf"),Color("83cfcc")])
 	var image := GradientTexture2D.new()
 	image.width = 256
 	image.height = 256

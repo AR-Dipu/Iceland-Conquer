@@ -48,6 +48,9 @@ func can_attack(id: String, catalog: CountryCatalog) -> bool:
 		if country != null and country.neighbors.has(id): return true
 	return false
 
+func can_play(id: String, catalog: CountryCatalog) -> bool:
+	return catalog.find(id) != null and (conquered.has(id) or can_attack(id,catalog))
+
 func begin(id: String) -> bool:
 	if not starting.is_empty(): return true
 	starting = id

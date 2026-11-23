@@ -1,0 +1,11 @@
+{
+  "balance": 180,
+  "sha256": "049994A086E84C9440C7902AAE46AF8E37A7B35A62ECFF3FF919AA0E3A3C54CD",
+  "explicit_equipment_present": false,
+  "campaign_preserved": true,
+  "code": 16,
+  "wallet_preserved": true,
+  "package": "com.islandconquer.prototype",
+  "equipment_preserved": true,
+  "version": "0.1.15"
+}

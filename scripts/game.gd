@@ -44,6 +44,7 @@ var collection := Collection.new()
 var match_character := "cat"
 var arrival_elapsed: float = 0
 var newcomer_serial := 0
+var trail_echoes: Array[Line2D] = []
 var telemetry := RoundTelemetry.new()
 var ocean: TropicalOcean
 var internal_preview: Dictionary = {}
@@ -149,7 +150,20 @@ func _apply_internal_preview() -> void:
 		hud.coin_balance = 40
 		hud.coin_button.disabled = true
 	if internal_preview.get("editing",false): selector.begin_name_edit()
+	if internal_preview.get("metrics",false) and state == State.PLAYING:
+		WorkMetrics.samples.clear()
+		WorkMetrics.enabled = true
+		get_tree().create_timer(11.0).timeout.connect(_report_preview_metrics)
 	print("INTERNAL_PREVIEW ",mode," ",id)
+
+func _report_preview_metrics() -> void:
+	print("INTERNAL_CAPTURE_VISIBILITY ",JSON.stringify({
+		"state":state,"visible_delays":territory.visible_delays if is_instance_valid(territory) else []
+	}))
+	var phases := WorkMetrics.report()
+	for phase in phases:
+		print("INTERNAL_PERFORMANCE ",phase," ",JSON.stringify(phases[phase]))
+	WorkMetrics.enabled = false
 
 func _warm_materials() -> void:
 	var viewport := SubViewport.new()
@@ -268,10 +282,13 @@ func load_country(country_id: String) -> bool:
 	territory.setup(config, current_map)
 	territory.territory_changed.connect(hud.update_scores)
 	territory.captured.connect(_capture_committed)
+	var appearances := Collection.CATALOG.keys()
+	appearances.erase(match_character)
+	appearances.shuffle()
 	for team in config.spawn_points.size():
 		var actor: ConquerCharacter = CHARACTER_SCENE.instantiate()
 		actor.setup(team, config)
-		if team == 0: actor.apply_character(match_character)
+		actor.apply_character(match_character if team == 0 else str(appearances.pop_back()))
 		world_root.add_child(actor.trail)
 		world_root.add_child(actor)
 		actor.reset_actor()
@@ -320,13 +337,14 @@ func start_round() -> void:
 	if state == State.LOADING:
 		return
 	var replay: bool = state in [State.PLAYING,State.PAUSED,State.DEFEATED,State.ROUND_OVER] and current_map != null and selected_country == current_map.country_id
-	if not replay and not campaign.can_attack(selected_country, catalog):
+	if not replay and not campaign.can_play(selected_country, catalog):
 		selector.message = "Choose a neighboring country to continue."
 		return
 	if not campaign.begin(selected_country):
 		selector.message = "Campaign could not save. Please try again."
 		return
 	reward.cancel()
+	hud.earned_coins.clear()
 	reward_token = -1
 	winning_team = -1
 	coin_revives = 0
@@ -449,6 +467,10 @@ func try_newcomer() -> bool:
 	territory.regions[team] = [patch]
 	var actor: ConquerCharacter = CHARACTER_SCENE.instantiate()
 	actor.setup(team,config)
+	var appearances := Collection.CATALOG.keys()
+	for live_actor in actors:
+		if live_actor.active: appearances.erase(live_actor.appearance_id)
+	actor.apply_character(str(appearances.pick_random()))
 	world_root.add_child(actor.trail)
 	world_root.add_child(actor)
 	actor.reset_actor()
@@ -512,7 +534,9 @@ func _resolve_attacks() -> void:
 
 func _defeat_player(attacker: int, method: String) -> void:
 	telemetry.record("elimination",{"team":0,"attacker":attacker,"credited":true,"time":active_seconds,"method":method})
+	_dissolve_trail(actors[0])
 	actors[0].trail.clear()
+	hud.play_event("defeat")
 	_set_state(State.DEFEATED)
 
 func _home_entry(actor: ConquerCharacter) -> float:
@@ -630,36 +654,54 @@ func reset_character(team: int) -> void:
 		hud.show_toast("%s is heading home!" % player_names[team])
 
 func _capture_committed(team: int, gain: float, at: Vector2) -> void:
+	var began := WorkMetrics.start()
 	_captured(team,gain,at)
 	var victims: Array[int] = []
 	for actor in actors:
 		if actor.active and actor.team != team and territory.newly_encircles(actor.position):
 			victims.append(actor.team)
+	var before: float = territory.fractions[team]
+	var transferred := false
 	for victim in victims:
-		if victim > 0: eliminate_bot(victim,team,"encirclement")
+		if victim > 0:
+			eliminate_bot(victim,team,"encirclement",false)
+			transferred = true
+	if transferred:
+		territory.regions[team] = IslandGeometry.merge_regions(territory.typed(territory.regions[team]))
+		territory._update_fractions()
+		if territory.fractions[team] > before:
+			_captured(team,territory.fractions[team]-before,at)
+	WorkMetrics.finish("encirclement_transfer",began)
 	if victims.has(0):
 		_defeat_player(team,"encirclement")
 		return
 	_check_victory(team)
 
 func _captured(team: int, gain: float, at: Vector2) -> void:
+	actors[team].react("capture")
 	telemetry.record("capture",{"team":team,"gain":gain,"time":active_seconds})
 	hud.update_scores(territory.fractions)
 	popups.append({"position": at, "text": "+%.1f%%" % (gain * 100), "life": 1.4, "team": team})
 	if team == 0:
 		hud.show_toast("TERRITORY CAPTURED! +%.1f%%" % (gain * 100))
+		hud.play_event("capture")
 func _check_victory(team: int) -> void:
 	if state != State.PLAYING or not actors[team].active or territory.fractions[team] < config.win_fraction: return
 	for opponent in actors:
 		if opponent.active and opponent.team != team: return
 	if team == 0:
 		campaign.conquer(selected_country)
-		wallet.transact("country:" + selected_country, wallet.settings.completion_coins)
+		_credit_result("country:" + selected_country,wallet.settings.completion_coins,"First conquest")
 		if active_seconds >= 120:
-			wallet.transact("objective:" + match_id, wallet.settings.objective_coins)
+			_credit_result("objective:" + match_id,wallet.settings.objective_coins,"Match objective")
 		_wallet_ui()
 	winning_team = team
 	_set_state(State.ROUND_OVER)
+	hud.play_event("victory")
+
+func _credit_result(key: String, coins: int, reason: String) -> void:
+	if not wallet.claimed(key) and wallet.transact(key,coins):
+		hud.add_reward(reason,coins)
 
 func pause_round() -> void:
 	if state == State.PLAYING:
@@ -737,7 +779,7 @@ func _reward_completed(token: int) -> void:
 	reward_token = -1
 	if ad_purpose == "bonus":
 		if wallet.claimed("country:" + selected_country):
-			wallet.transact("bonus:" + selected_country, wallet.settings.completion_coins * (wallet.settings.multiplier - 1))
+			_credit_result("bonus:" + selected_country,wallet.settings.completion_coins*(wallet.settings.multiplier-1),"Demo bonus")
 		_wallet_ui()
 		_set_state(State.ROUND_OVER)
 		return
@@ -754,6 +796,7 @@ func begin_bonus() -> void:
 func _claim_pending_bonus(id: String) -> void:
 	if state != State.SELECTION or not wallet.claimed("country:"+id) or wallet.claimed("bonus:"+id): return
 	if not load_country(id): return
+	hud.earned_coins.clear()
 	winning_team = 0
 	_wallet_ui()
 	_set_state(State.ROUND_OVER)
@@ -789,6 +832,8 @@ func _revive_player() -> void:
 	actor.movement_path = PackedVector2Array([safe])
 	actor.trail.clear()
 	actor.protection = wallet.settings.shield_seconds + actor.revival_shield_bonus
+	actor.react("revive")
+	hud.play_event("revive")
 	home_points[0] = safe
 	home_regions[0] = territory.region_at(0, safe)
 	_set_state(State.PLAYING)
@@ -815,10 +860,11 @@ func _revival_land() -> Array:
 	hud.show_toast("No safe neutral land. Restart for free.")
 	return []
 
-func eliminate_bot(team: int, attacker: int = -1, method: String = "trail") -> void:
+func eliminate_bot(team: int, attacker: int = -1, method: String = "trail", finalize: bool = true) -> void:
 	if team <= 0 or not actors[team].active:
 		return
 	telemetry.record("elimination",{"team":team,"attacker":attacker,"credited":attacker >= 0 and actors[attacker].active,"time":active_seconds,"method":method})
+	_dissolve_trail(actors[team])
 	actors[team].active = false
 	actors[team].hide()
 	actors[team].trail.clear()
@@ -827,8 +873,31 @@ func eliminate_bot(team: int, attacker: int = -1, method: String = "trail") -> v
 	var before: float = territory.fractions[attacker] if attacker >= 0 else 0
 	if attacker >= 0 and actors[attacker].active:
 		territory.regions[attacker].append_array(territory.regions[team])
-		territory.regions[attacker] = IslandGeometry.merge_regions(territory.typed(territory.regions[attacker]))
+		if finalize:
+			territory.regions[attacker] = IslandGeometry.merge_regions(territory.typed(territory.regions[attacker]))
 	territory.regions[team] = []
+	if not finalize: return
 	territory._update_fractions()
 	if attacker >= 0 and actors[attacker].active:
 		_captured(attacker, territory.fractions[attacker] - before, actors[attacker].position)
+
+func _dissolve_trail(actor: ConquerCharacter) -> void:
+	for i in range(trail_echoes.size()-1,-1,-1):
+		if not is_instance_valid(trail_echoes[i]) or trail_echoes[i].is_queued_for_deletion():
+			trail_echoes.remove_at(i)
+	if trail_echoes.size() >= 3 or actor.trail.points.size() < 2 or not is_instance_valid(world_root): return
+	var line := Line2D.new()
+	var stride := maxi(1,ceili(actor.trail.points.size()/64.0))
+	for i in range(0,actor.trail.points.size()-1,stride):
+		line.add_point(actor.trail.points[i])
+	line.add_point(actor.trail.points[-1])
+	line.width = 12.0
+	line.default_color = actor.trail.tint.lightened(0.4)
+	line.z_index = 2
+	world_root.add_child(line)
+	trail_echoes.append(line)
+	var fade := create_tween()
+	fade.set_parallel(true)
+	fade.tween_property(line,"modulate:a",0.0,0.24)
+	fade.tween_property(line,"width",1.0,0.24)
+	fade.chain().tween_callback(line.queue_free)
