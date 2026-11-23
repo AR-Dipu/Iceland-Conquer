@@ -80,6 +80,8 @@ func run() -> void:
 	game.actors[0].trail.clear()
 	game.actors[2].trail.clear()
 	game.territory.regions = [[],IslandGeometry.subtract(game.island,hole),[],[]]
+	for opponent in game.actors:
+		if opponent.team != actor.team: opponent.active = false
 	game.territory._update_fractions()
 	assert(game.territory.fractions[1] < 0.99)
 	brain.reset()
@@ -92,6 +94,24 @@ func run() -> void:
 		actor.advance(direction,1.0/60,game.island)
 		game._update_trail(actor)
 	assert(game.winning_team == 1 and game.state == game.State.ROUND_OVER,"Final pocket must cause actual AI win")
+	game.queue_free()
+	await process_frame
+	game = fixture()
+	actor = game.actors[1]
+	brain = game.brains[1]
+	game.actors[0].position = Vector2(850,850)
+	game.actors[3].active = false
+	game.actors[2].position = Vector2(310,150)
+	game.territory.regions[2] = [rectangle(290,130,40,40)]
+	game.territory._update_fractions()
+	game.telemetry.enabled = true
+	for tick in 1800:
+		if not game.actors[2].active: break
+		game.territory.begin_planning_frame()
+		var direction: Vector2 = brain.steer(actor,game.territory,game.current_map,1.0/60)
+		actor.advance(direction,1.0/60,game.island)
+		game._update_trail(actor)
+	assert(game.telemetry.cuts_by_bots("encirclement") == 1,"AI must encircle an opponent without a trail")
 	game.queue_free()
 	await process_frame
 	print("RESULT loop overlap, real cuts, commitment, defense and AI victory passed")

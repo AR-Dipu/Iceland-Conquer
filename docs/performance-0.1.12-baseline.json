@@ -1,0 +1,73 @@
+{
+  "frames": 3600,
+  "median_cpu_ms": 0.57,
+  "mesh_total_ms": 43.004,
+  "ownership": [
+    0.00300384543486566,
+    0.061054669578703,
+    0.0255350004271177,
+    0.06386947683437,
+    0.0611721033889924,
+    0.0258609321303979,
+    0.0,
+    0.176837314905668
+  ],
+  "p95_cpu_ms": 2.746,
+  "phases": {
+    "capture_transaction": {
+      "count": 36,
+      "median_us": 6088,
+      "p95_us": 10832,
+      "worst_us": 11507
+    },
+    "effect_upload": {
+      "count": 34,
+      "median_us": 16,
+      "p95_us": 51,
+      "worst_us": 4374
+    },
+    "mesh_upload": {
+      "count": 37,
+      "median_us": 999,
+      "p95_us": 2366,
+      "worst_us": 3494
+    },
+    "movement": {
+      "count": 12000,
+      "median_us": 5,
+      "p95_us": 7,
+      "worst_us": 190
+    },
+    "planning_candidates": {
+      "count": 1250,
+      "median_us": 54,
+      "p95_us": 212,
+      "worst_us": 668
+    },
+    "planning_preview_slice": {
+      "count": 627,
+      "median_us": 2003,
+      "p95_us": 2537,
+      "worst_us": 5239
+    },
+    "shore_prediction": {
+      "count": 12000,
+      "median_us": 14,
+      "p95_us": 20,
+      "worst_us": 216
+    },
+    "tactical_scan": {
+      "count": 1818,
+      "median_us": 295,
+      "p95_us": 514,
+      "worst_us": 3754
+    },
+    "trail_upload": {
+      "count": 38,
+      "median_us": 2,
+      "p95_us": 15,
+      "worst_us": 36
+    }
+  },
+  "worst_cpu_ms": 14.901
+}

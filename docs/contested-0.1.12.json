@@ -1,0 +1,842 @@
+[
+  {
+    "abandoned": 7,
+    "ai_cpu_ms": 6708.068,
+    "all_eliminations": 3,
+    "baseline": true,
+    "country": "bgd",
+    "cuts": 3,
+    "initial": 0.0235972347054328,
+    "land": 0.450400017790443,
+    "net_land": 0.42680278308501,
+    "normal_reverse_units": 88.6986029446125,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 340.416788905859,
+      "expand": 88.6986029446125,
+      "recover": 0.0
+    },
+    "scheduled_wait": 122.283333333327,
+    "seed": 190,
+    "surviving_bots": 4,
+    "travel_by_action": {
+      "attack": 101.578796863556,
+      "defend": 1473.71562054753,
+      "expand": 16818.8422416598,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 7,
+    "ai_cpu_ms": 6200.293,
+    "all_eliminations": 4,
+    "baseline": false,
+    "country": "bgd",
+    "cuts": 4,
+    "initial": 0.0235972347054328,
+    "land": 0.57132728399008,
+    "net_land": 0.547730049284647,
+    "normal_reverse_units": 18.2000713348389,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 213.799130186439,
+      "expand": 18.2000713348389,
+      "recover": 0.0
+    },
+    "scheduled_wait": 128.866666666659,
+    "seed": 190,
+    "surviving_bots": 3,
+    "travel_by_action": {
+      "attack": 545.891234755516,
+      "defend": 1622.88460126519,
+      "expand": 17742.3321900815,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 11,
+    "ai_cpu_ms": 7382.706,
+    "all_eliminations": 3,
+    "baseline": true,
+    "country": "ind",
+    "cuts": 3,
+    "initial": 0.0226820275313838,
+    "land": 0.570247875203375,
+    "net_land": 0.547565847671991,
+    "normal_reverse_units": 20.001898765564,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 312.332314878702,
+      "expand": 20.001898765564,
+      "recover": 0.0
+    },
+    "scheduled_wait": 115.883333333327,
+    "seed": 190,
+    "surviving_bots": 4,
+    "travel_by_action": {
+      "attack": 154.698427438736,
+      "defend": 3586.89848141372,
+      "expand": 18056.4387609363,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 21,
+    "ai_cpu_ms": 5470.801,
+    "all_eliminations": 4,
+    "baseline": false,
+    "country": "ind",
+    "cuts": 4,
+    "initial": 0.0226820275313838,
+    "land": 0.458919778713088,
+    "net_land": 0.436237751181704,
+    "normal_reverse_units": 42.4162279367447,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 452.599446833134,
+      "expand": 42.4162279367447,
+      "recover": 0.0
+    },
+    "scheduled_wait": 117.633333333327,
+    "seed": 190,
+    "surviving_bots": 3,
+    "travel_by_action": {
+      "attack": 833.430815458298,
+      "defend": 3391.1688541919,
+      "expand": 15750.0781981498,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 16,
+    "ai_cpu_ms": 2825.553,
+    "all_eliminations": 5,
+    "baseline": true,
+    "country": "lka",
+    "cuts": 5,
+    "initial": 0.0214953738883058,
+    "land": 0.560669350068207,
+    "net_land": 0.539173976179901,
+    "normal_reverse_units": 44.7169228941202,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 648.148387387395,
+      "expand": 44.7169228941202,
+      "recover": 0.0
+    },
+    "scheduled_wait": 71.3666666666631,
+    "seed": 190,
+    "surviving_bots": 2,
+    "travel_by_action": {
+      "attack": 495.94486951828,
+      "defend": 5312.41677136719,
+      "expand": 15878.3460956365,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 13,
+    "ai_cpu_ms": 3769.336,
+    "all_eliminations": 5,
+    "baseline": false,
+    "country": "lka",
+    "cuts": 5,
+    "initial": 0.0214953738883058,
+    "land": 0.515669540735138,
+    "net_land": 0.494174166846832,
+    "normal_reverse_units": 72.7508223503828,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 782.40284794569,
+      "expand": 72.7508223503828,
+      "recover": 0.0
+    },
+    "scheduled_wait": 39.5333333333315,
+    "seed": 190,
+    "surviving_bots": 2,
+    "travel_by_action": {
+      "attack": 459.55003631115,
+      "defend": 4123.51713253558,
+      "expand": 15737.0490373671,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 4,
+    "ai_cpu_ms": 6524.459,
+    "all_eliminations": 2,
+    "baseline": true,
+    "country": "jpn",
+    "cuts": 2,
+    "initial": 0.0346314484352677,
+    "land": 0.506684825813392,
+    "net_land": 0.472053377378124,
+    "normal_reverse_units": 87.1555536538363,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 316.153676748276,
+      "expand": 87.1555536538363,
+      "recover": 0.0
+    },
+    "scheduled_wait": 113.783333333327,
+    "seed": 190,
+    "surviving_bots": 5,
+    "travel_by_action": {
+      "attack": 9.10016942024231,
+      "defend": 1165.24504411221,
+      "expand": 18802.1519908458,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 13,
+    "ai_cpu_ms": 4687.456,
+    "all_eliminations": 4,
+    "baseline": false,
+    "country": "jpn",
+    "cuts": 4,
+    "initial": 0.0346314484352677,
+    "land": 0.521708836862284,
+    "net_land": 0.487077388427017,
+    "normal_reverse_units": 151.518820270896,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 310.761535644531,
+      "expand": 151.518820270896,
+      "recover": 0.0
+    },
+    "scheduled_wait": 85.3666666666623,
+    "seed": 190,
+    "surviving_bots": 3,
+    "travel_by_action": {
+      "attack": 222.881419897079,
+      "defend": 1413.27510817349,
+      "expand": 18500.3449662775,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 13,
+    "ai_cpu_ms": 3572.045,
+    "all_eliminations": 5,
+    "baseline": true,
+    "country": "isl",
+    "cuts": 5,
+    "initial": 0.0183043196987644,
+    "land": 0.500762438446845,
+    "net_land": 0.482458118748081,
+    "normal_reverse_units": 308.513394445181,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 406.318422809243,
+      "expand": 308.513394445181,
+      "recover": 0.0
+    },
+    "scheduled_wait": 34.0999999999985,
+    "seed": 190,
+    "surviving_bots": 2,
+    "travel_by_action": {
+      "attack": 671.855923056602,
+      "defend": 4391.70146529377,
+      "expand": 20114.0226661563,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 19,
+    "ai_cpu_ms": 4893.522,
+    "all_eliminations": 6,
+    "baseline": false,
+    "country": "isl",
+    "cuts": 6,
+    "initial": 0.0183043196987644,
+    "land": 0.421655767416843,
+    "net_land": 0.403351447718079,
+    "normal_reverse_units": 82.58430737257,
+    "reverse_by_action": {
+      "attack": 18.9335021674633,
+      "defend": 303.965836003423,
+      "expand": 63.6508052051067,
+      "recover": 0.0
+    },
+    "scheduled_wait": 30.683333333332,
+    "seed": 190,
+    "surviving_bots": 1,
+    "travel_by_action": {
+      "attack": 1668.98058769107,
+      "defend": 4125.89189267159,
+      "expand": 16306.5929120928,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 8,
+    "ai_cpu_ms": 5014.511,
+    "all_eliminations": 3,
+    "baseline": true,
+    "country": "bgd",
+    "cuts": 3,
+    "initial": 0.0235972347054328,
+    "land": 0.445963062079515,
+    "net_land": 0.422365827374082,
+    "normal_reverse_units": 68.3885420113802,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 118.984568238258,
+      "expand": 68.3885420113802,
+      "recover": 0.0
+    },
+    "scheduled_wait": 123.483333333327,
+    "seed": 7016,
+    "surviving_bots": 4,
+    "travel_by_action": {
+      "attack": 442.791706204414,
+      "defend": 1967.0450745672,
+      "expand": 18030.2900296524,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 6,
+    "ai_cpu_ms": 3852.149,
+    "all_eliminations": 3,
+    "baseline": false,
+    "country": "bgd",
+    "cuts": 3,
+    "initial": 0.0235972347054328,
+    "land": 0.309982170194339,
+    "net_land": 0.286384935488906,
+    "normal_reverse_units": 18.2000713348389,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 118.982723712921,
+      "expand": 18.2000713348389,
+      "recover": 0.0
+    },
+    "scheduled_wait": 177.699999999948,
+    "seed": 7016,
+    "surviving_bots": 4,
+    "travel_by_action": {
+      "attack": 510.336977481842,
+      "defend": 1415.00948596001,
+      "expand": 14788.9736222178,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 12,
+    "ai_cpu_ms": 5947.876,
+    "all_eliminations": 4,
+    "baseline": true,
+    "country": "ind",
+    "cuts": 4,
+    "initial": 0.0226820275313838,
+    "land": 0.548441105802432,
+    "net_land": 0.525759078271049,
+    "normal_reverse_units": 0.0,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 518.552396833897,
+      "expand": 0.0,
+      "recover": 0.0
+    },
+    "scheduled_wait": 70.2166666666631,
+    "seed": 7016,
+    "surviving_bots": 3,
+    "travel_by_action": {
+      "attack": 157.580315828323,
+      "defend": 3341.75666207075,
+      "expand": 19069.8913900852,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 20,
+    "ai_cpu_ms": 5288.37,
+    "all_eliminations": 5,
+    "baseline": false,
+    "country": "ind",
+    "cuts": 5,
+    "initial": 0.0226820275313838,
+    "land": 0.556525182482268,
+    "net_land": 0.533843154950884,
+    "normal_reverse_units": 80.333042755723,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 271.384064003825,
+      "expand": 80.333042755723,
+      "recover": 0.0
+    },
+    "scheduled_wait": 74.8499999999962,
+    "seed": 7016,
+    "surviving_bots": 2,
+    "travel_by_action": {
+      "attack": 904.418186336756,
+      "defend": 2908.22176931798,
+      "expand": 16239.903774336,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 17,
+    "ai_cpu_ms": 2435.983,
+    "all_eliminations": 6,
+    "baseline": true,
+    "country": "lka",
+    "cuts": 6,
+    "initial": 0.0214956525077563,
+    "land": 0.564055043503126,
+    "net_land": 0.542559390995369,
+    "normal_reverse_units": 423.684397533536,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 364.583593413234,
+      "expand": 423.684397533536,
+      "recover": 0.0
+    },
+    "scheduled_wait": 35.2833333333318,
+    "seed": 7016,
+    "surviving_bots": 1,
+    "travel_by_action": {
+      "attack": 676.058076262474,
+      "defend": 4872.38716305792,
+      "expand": 17944.2170723379,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 15,
+    "ai_cpu_ms": 3108.584,
+    "all_eliminations": 6,
+    "baseline": false,
+    "country": "lka",
+    "cuts": 6,
+    "initial": 0.0214956525077563,
+    "land": 0.473657729928168,
+    "net_land": 0.452162077420412,
+    "normal_reverse_units": 100.050662398338,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 605.68635545671,
+      "expand": 100.050662398338,
+      "recover": 0.0
+    },
+    "scheduled_wait": 31.8166666666653,
+    "seed": 7016,
+    "surviving_bots": 1,
+    "travel_by_action": {
+      "attack": 1661.80289259553,
+      "defend": 3795.28446631134,
+      "expand": 15037.611105755,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 7,
+    "ai_cpu_ms": 4783.918,
+    "all_eliminations": 3,
+    "baseline": true,
+    "country": "jpn",
+    "cuts": 3,
+    "initial": 0.0346314484352677,
+    "land": 0.510385329138745,
+    "net_land": 0.475753880703478,
+    "normal_reverse_units": 103.767794519663,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 363.164964348078,
+      "expand": 103.767794519663,
+      "recover": 0.0
+    },
+    "scheduled_wait": 110.383333333328,
+    "seed": 7016,
+    "surviving_bots": 4,
+    "travel_by_action": {
+      "attack": 221.437191009521,
+      "defend": 2378.68928194046,
+      "expand": 22215.977162987,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 13,
+    "ai_cpu_ms": 4580.421,
+    "all_eliminations": 3,
+    "baseline": false,
+    "country": "jpn",
+    "cuts": 3,
+    "initial": 0.0346314484352677,
+    "land": 0.533551598489393,
+    "net_land": 0.498920150054125,
+    "normal_reverse_units": 52.2503385841846,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 430.579893708229,
+      "expand": 52.2503385841846,
+      "recover": 0.0
+    },
+    "scheduled_wait": 89.516666666662,
+    "seed": 7016,
+    "surviving_bots": 4,
+    "travel_by_action": {
+      "attack": 433.201280117035,
+      "defend": 1509.53324735165,
+      "expand": 22582.1573822647,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 12,
+    "ai_cpu_ms": 2041.03,
+    "all_eliminations": 5,
+    "baseline": true,
+    "country": "isl",
+    "cuts": 4,
+    "initial": 0.0183043196987644,
+    "land": 0.600138453788951,
+    "net_land": 0.581834134090186,
+    "normal_reverse_units": 0.0,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 333.517492860556,
+      "expand": 0.0,
+      "recover": 0.0
+    },
+    "scheduled_wait": 32.9333333333319,
+    "seed": 7016,
+    "surviving_bots": 2,
+    "travel_by_action": {
+      "attack": 165.205223083496,
+      "defend": 3815.4051823765,
+      "expand": 18941.1843241006,
+      "recover": 336.337636351585
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 10,
+    "ai_cpu_ms": 3633.263,
+    "all_eliminations": 5,
+    "baseline": false,
+    "country": "isl",
+    "cuts": 5,
+    "initial": 0.0183043196987644,
+    "land": 0.28436586239904,
+    "net_land": 0.266061542700275,
+    "normal_reverse_units": 127.30142763257,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 178.084366768599,
+      "expand": 127.30142763257,
+      "recover": 0.0
+    },
+    "scheduled_wait": 73.0333333333296,
+    "seed": 7016,
+    "surviving_bots": 2,
+    "travel_by_action": {
+      "attack": 1303.65596187115,
+      "defend": 2305.04022343457,
+      "expand": 14994.4231010526,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 8,
+    "ai_cpu_ms": 3563.165,
+    "all_eliminations": 3,
+    "baseline": true,
+    "country": "bgd",
+    "cuts": 3,
+    "initial": 0.0235972347054328,
+    "land": 0.547742628046535,
+    "net_land": 0.524145393341102,
+    "normal_reverse_units": 18.2000713348389,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 203.916232720017,
+      "expand": 18.2000713348389,
+      "recover": 0.0
+    },
+    "scheduled_wait": 153.89999999997,
+    "seed": 111,
+    "surviving_bots": 4,
+    "travel_by_action": {
+      "attack": 42.4125729799271,
+      "defend": 2732.14024868608,
+      "expand": 19196.1817610711,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 6,
+    "ai_cpu_ms": 2802.547,
+    "all_eliminations": 4,
+    "baseline": false,
+    "country": "bgd",
+    "cuts": 4,
+    "initial": 0.0235972347054328,
+    "land": 0.438912437210899,
+    "net_land": 0.415315202505466,
+    "normal_reverse_units": 49.4407248049974,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 106.116491883993,
+      "expand": 49.4407248049974,
+      "recover": 0.0
+    },
+    "scheduled_wait": 115.416666666661,
+    "seed": 111,
+    "surviving_bots": 3,
+    "travel_by_action": {
+      "attack": 767.886881828308,
+      "defend": 1374.22868660092,
+      "expand": 16655.1971828341,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 11,
+    "ai_cpu_ms": 3192.213,
+    "all_eliminations": 5,
+    "baseline": true,
+    "country": "ind",
+    "cuts": 5,
+    "initial": 0.0226820275313838,
+    "land": 0.408156968413576,
+    "net_land": 0.385474940882192,
+    "normal_reverse_units": 236.498660713434,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 131.898122698069,
+      "expand": 236.498660713434,
+      "recover": 0.0
+    },
+    "scheduled_wait": 78.1333333333293,
+    "seed": 111,
+    "surviving_bots": 2,
+    "travel_by_action": {
+      "attack": 494.391246914864,
+      "defend": 3026.29326049984,
+      "expand": 14610.4210734814,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 12,
+    "ai_cpu_ms": 3995.783,
+    "all_eliminations": 5,
+    "baseline": false,
+    "country": "ind",
+    "cuts": 5,
+    "initial": 0.0226820275313838,
+    "land": 0.457806684971831,
+    "net_land": 0.435124657440447,
+    "normal_reverse_units": 93.200934201479,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 142.516976162791,
+      "expand": 93.200934201479,
+      "recover": 0.0
+    },
+    "scheduled_wait": 94.8833333333284,
+    "seed": 111,
+    "surviving_bots": 2,
+    "travel_by_action": {
+      "attack": 774.309989452362,
+      "defend": 2432.73790465295,
+      "expand": 14674.2552486062,
+      "recover": 25.7816189527512
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 16,
+    "ai_cpu_ms": 2853.079,
+    "all_eliminations": 5,
+    "baseline": true,
+    "country": "lka",
+    "cuts": 5,
+    "initial": 0.0214956525077563,
+    "land": 0.400313085678127,
+    "net_land": 0.378817433170371,
+    "normal_reverse_units": 206.168081879616,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 361.649703502655,
+      "expand": 206.168081879616,
+      "recover": 0.0
+    },
+    "scheduled_wait": 57.5666666666638,
+    "seed": 111,
+    "surviving_bots": 2,
+    "travel_by_action": {
+      "attack": 574.806524395943,
+      "defend": 4810.30429798365,
+      "expand": 15012.883883819,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 18,
+    "ai_cpu_ms": 2251.239,
+    "all_eliminations": 6,
+    "baseline": false,
+    "country": "lka",
+    "cuts": 6,
+    "initial": 0.0214956525077563,
+    "land": 0.557959067361974,
+    "net_land": 0.536463414854217,
+    "normal_reverse_units": 97.017289981246,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 355.534287154675,
+      "expand": 97.017289981246,
+      "recover": 0.0
+    },
+    "scheduled_wait": 32.3166666666653,
+    "seed": 111,
+    "surviving_bots": 1,
+    "travel_by_action": {
+      "attack": 1113.95516550541,
+      "defend": 4246.47745834291,
+      "expand": 13876.0721846223,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 6,
+    "ai_cpu_ms": 3681.96,
+    "all_eliminations": 2,
+    "baseline": true,
+    "country": "jpn",
+    "cuts": 2,
+    "initial": 0.0346314484352677,
+    "land": 0.314539989353088,
+    "net_land": 0.27990854091782,
+    "normal_reverse_units": 168.250273898244,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 354.850197941065,
+      "expand": 168.250273898244,
+      "recover": 0.0
+    },
+    "scheduled_wait": 170.6333333333,
+    "seed": 111,
+    "surviving_bots": 5,
+    "travel_by_action": {
+      "attack": 113.436122894287,
+      "defend": 1232.66814720631,
+      "expand": 14704.6337661892,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 9,
+    "ai_cpu_ms": 5179.083,
+    "all_eliminations": 3,
+    "baseline": false,
+    "country": "jpn",
+    "cuts": 3,
+    "initial": 0.0346314484352677,
+    "land": 0.573155771901694,
+    "net_land": 0.538524323466426,
+    "normal_reverse_units": 154.550535663962,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 338.067395880818,
+      "expand": 154.550535663962,
+      "recover": 0.0
+    },
+    "scheduled_wait": 81.8666666666625,
+    "seed": 111,
+    "surviving_bots": 4,
+    "travel_by_action": {
+      "attack": 125.882385253906,
+      "defend": 1231.32651636004,
+      "expand": 21038.5856438726,
+      "recover": 0.0
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 17,
+    "ai_cpu_ms": 3564.119,
+    "all_eliminations": 5,
+    "baseline": true,
+    "country": "isl",
+    "cuts": 5,
+    "initial": 0.0183043196987644,
+    "land": 0.431017821034667,
+    "net_land": 0.412713501335903,
+    "normal_reverse_units": 135.716128602624,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 230.431837588549,
+      "expand": 135.716128602624,
+      "recover": 0.0
+    },
+    "scheduled_wait": 51.9333333333308,
+    "seed": 111,
+    "surviving_bots": 2,
+    "travel_by_action": {
+      "attack": 262.76439011097,
+      "defend": 6051.33795358241,
+      "expand": 19963.648013413,
+      "recover": 89.2309848070145
+    },
+    "winner": -1
+  },
+  {
+    "abandoned": 9,
+    "ai_cpu_ms": 3236.991,
+    "all_eliminations": 5,
+    "baseline": false,
+    "country": "isl",
+    "cuts": 5,
+    "initial": 0.0183043196987644,
+    "land": 0.34249266827388,
+    "net_land": 0.324188348575115,
+    "normal_reverse_units": 86.3998937904835,
+    "reverse_by_action": {
+      "attack": 0.0,
+      "defend": 337.333527356386,
+      "expand": 86.3998937904835,
+      "recover": 0.0
+    },
+    "scheduled_wait": 74.8333333333295,
+    "seed": 111,
+    "surviving_bots": 2,
+    "travel_by_action": {
+      "attack": 1112.91418647766,
+      "defend": 1894.3600230664,
+      "expand": 15275.6939514279,
+      "recover": 0.0
+    },
+    "winner": -1
+  }
+]

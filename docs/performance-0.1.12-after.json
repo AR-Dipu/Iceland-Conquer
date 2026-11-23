@@ -1,0 +1,109 @@
+{
+  "frames": 3600,
+  "median_cpu_ms": 0.582,
+  "mesh_total_ms": 74.575,
+  "ownership": [
+    0.00337105962046846,
+    0.0,
+    0.0259195799328214,
+    0.172146567422605,
+    0.0,
+    0.0893575239644489,
+    0.0,
+    0.0
+  ],
+  "p95_cpu_ms": 2.775,
+  "phases": {
+    "capture_merge": {
+      "count": 35,
+      "median_us": 236,
+      "p95_us": 1289,
+      "worst_us": 2702
+    },
+    "capture_topology": {
+      "count": 36,
+      "median_us": 3030,
+      "p95_us": 12228,
+      "worst_us": 15329
+    },
+    "capture_transaction": {
+      "count": 36,
+      "median_us": 3761,
+      "p95_us": 17308,
+      "worst_us": 31798
+    },
+    "effect_upload": {
+      "count": 31,
+      "median_us": 10,
+      "p95_us": 42,
+      "worst_us": 50
+    },
+    "mesh_upload": {
+      "count": 39,
+      "median_us": 858,
+      "p95_us": 6222,
+      "worst_us": 8854
+    },
+    "movement": {
+      "count": 12000,
+      "median_us": 5,
+      "p95_us": 7,
+      "worst_us": 81
+    },
+    "planning_candidates": {
+      "count": 796,
+      "median_us": 87,
+      "p95_us": 236,
+      "worst_us": 723
+    },
+    "planning_preview_slice": {
+      "count": 630,
+      "median_us": 2003,
+      "p95_us": 3338,
+      "worst_us": 8398
+    },
+    "shore_prediction": {
+      "count": 12000,
+      "median_us": 15,
+      "p95_us": 21,
+      "worst_us": 361
+    },
+    "tactical_scan": {
+      "count": 1597,
+      "median_us": 355,
+      "p95_us": 877,
+      "worst_us": 8146
+    },
+    "topology_buckets": {
+      "count": 36,
+      "median_us": 525,
+      "p95_us": 2511,
+      "worst_us": 2563
+    },
+    "topology_faces": {
+      "count": 36,
+      "median_us": 378,
+      "p95_us": 1783,
+      "worst_us": 2497
+    },
+    "topology_graph": {
+      "count": 36,
+      "median_us": 754,
+      "p95_us": 2623,
+      "worst_us": 5853
+    },
+    "topology_intersections": {
+      "count": 36,
+      "median_us": 956,
+      "p95_us": 4226,
+      "worst_us": 7046
+    },
+    "trail_upload": {
+      "count": 37,
+      "median_us": 2,
+      "p95_us": 15,
+      "worst_us": 38
+    }
+  },
+  "worst_cpu_ms": 40.945
+}

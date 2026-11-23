@@ -17,11 +17,10 @@ func run() -> void:
 	game.eliminate_bot(1)
 	var old_count: int = game.actors.size()
 	game.territory.fractions[0] = 0.4
-	assert(not game.try_newcomer(),"40 percent boundary")
-	game.territory._update_fractions()
-	assert(game.try_newcomer(),"Vacancy fills on neutral land")
-	assert(game.actors.size() == old_count+1 and not game.actors[1].active,"Fresh stable ID, no resurrection")
-	var team: int = game.actors.size()-1
+	var old_actor: ConquerCharacter = game.actors[1]
+	assert(game.try_newcomer(),"Vacancy fills regardless of player land share")
+	assert(game.actors.size() == old_count and game.actors[1] != old_actor and not old_actor.active)
+	var team: int = 1
 	assert(game.territory.owned(team,game.actors[team].position))
 	for other in team:
 		for p in game.territory.regions[other]:
@@ -30,9 +29,9 @@ func run() -> void:
 	var count_before: int = game.actors.size()
 	game.arrival_elapsed = 29.8
 	game._physics_process(0.1)
-	assert(game.actors.size() == count_before,"No early arrival")
+	assert(game.actors.size() == count_before and not game.actors[2].active,"No early arrival")
 	game._physics_process(0.2)
-	assert(game.actors.size() == count_before+1,"Arrival at 30 active seconds")
+	assert(game.actors.size() == count_before and game.actors[2].active,"Arrival at 30 active seconds")
 	game.pause_round()
 	var elapsed: float = game.arrival_elapsed
 	game._physics_process(60)

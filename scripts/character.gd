@@ -13,6 +13,25 @@ var movement_path := PackedVector2Array()
 var trail: ConquerTrail
 var sprite: Sprite2D
 var atlas: Texture2D = preload("res://assets/characters/cats.png")
+const Collection = preload("res://scripts/character_collection.gd")
+var speed_multiplier := 1.0
+var acceleration_multiplier := 1.0
+var revival_shield_bonus := 0.0
+
+func apply_character(id: String) -> void:
+	if team != 0 or id == "cat" or not Collection.CATALOG.has(id): return
+	var entry: Array = Collection.CATALOG[id]
+	speed_multiplier = entry[4]
+	acceleration_multiplier = entry[5]
+	revival_shield_bonus = entry[6]
+	sprite.texture = Collection.artwork(id)
+	sprite.scale = Vector2.ONE * (86.0 / float(sprite.texture.get_width()))
+
+func movement_speed() -> float:
+	return config.player_speed * speed_multiplier if team == 0 else config.bot_speed
+
+func movement_acceleration() -> float:
+	return config.player_acceleration * acceleration_multiplier if team == 0 else config.acceleration
 
 func setup(index: int, settings: GameConfig) -> void:
 	team = index
@@ -45,8 +64,7 @@ func reset_actor() -> void:
 func advance(direction: Vector2, delta: float, island: PackedVector2Array) -> void:
 	var was_protected := protection > 0
 	previous = position
-	var speed: float = config.player_speed if team == 0 else config.bot_speed
-	velocity = velocity.move_toward(direction.limit_length() * speed, (config.player_acceleration if team == 0 else config.acceleration) * delta)
+	velocity = velocity.move_toward(direction.limit_length() * movement_speed(), movement_acceleration() * delta)
 	var motion := ShoreMotion.solve(position,velocity,delta,island)
 	position = motion.position
 	velocity = motion.velocity

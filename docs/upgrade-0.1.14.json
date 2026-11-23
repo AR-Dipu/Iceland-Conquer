@@ -1,0 +1,12 @@
+{
+  "from": "0.1.13",
+  "to": "0.1.14",
+  "code": 15,
+  "package": "com.islandconquer.prototype",
+  "apk_sha256": "3A995E7638134A0529F2DEB9F664BE2E614EB7B69B86C78A28B1A2A912149F9B",
+  "wallet_preserved": true,
+  "campaign_preserved": true,
+  "equipment_file_preserved": true,
+  "explicit_equipment_present": false,
+  "balance": 180
+}

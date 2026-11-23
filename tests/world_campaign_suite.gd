@@ -76,15 +76,21 @@ func run() -> void:
 	game._resolve_attacks()
 	verify(game.running,"Self-crossing is safe")
 	game.territory.fractions[1] = 0.99
-	game._captured(1,0.1,Vector2.ZERO)
-	verify(game.winning_team == 1 and game.hud.display_percent(1) == 100,"Named opponent wins at 99 percent")
+	game._check_victory(1)
+	verify(game.running,"99 percent with surviving opponents is not a victory")
+	for opponent in game.actors:
+		if opponent.team != 1: opponent.active = false
+	game._check_victory(1)
+	verify(game.winning_team == 1 and game.hud.display_percent(1) == 100,"Last surviving named opponent wins at 99 percent")
 	verify(not game.campaign.conquered.has("bgd"),"Opponent grants no conquest")
 	game.start_round()
 	game.territory.fractions[0] = 0.9899
-	game._captured(0,0.1,Vector2.ZERO)
+	game.hud.update_scores(game.territory.fractions)
+	for rival in game.actors.slice(1): rival.active = false
+	game._check_victory(0)
 	verify(game.running and game.hud.display_percent(0) == 98,"Below threshold remains playing")
 	game.territory.fractions[0] = 0.99
-	game._captured(0,0.1,Vector2.ZERO)
+	game._check_victory(0)
 	verify(game.winning_team == 0 and game.hud.display_percent(0) == 100 and game.campaign.conquered.has("bgd"),"Player victory grants conquest at 99")
 	game.start_round()
 	verify(game.running,"Free replay allowed after winning")

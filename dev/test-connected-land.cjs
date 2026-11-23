@@ -1,0 +1,23 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const { connectedRings, geographicArea } = require('./connected-land.cjs');
+
+const small = [[0,0],[1,0],[1,1],[0,1]];
+const offshore = [[8,0],[11,0],[11,2],[8,2]];
+assert.deepEqual(connectedRings([small, offshore])[0], offshore);
+const high = [[0,73],[4,73],[4,74],[0,74]];
+const low = [[0,0],[2,0],[2,1],[0,1]];
+assert(geographicArea(high) < geographicArea(low));
+const west = [[179,4],[180,4],[180,6],[179,6]];
+const east = [[-180,4],[-179,4],[-179,6],[-180,6]];
+const joined = connectedRings([west, east]);
+assert.equal(joined.length, 1);
+assert(Math.abs(geographicArea(joined[0]) - geographicArea(west) - geographicArea(east)) < 1e-10);
+const source = JSON.parse(fs.readFileSync('dev/country_boundaries.geojson'));
+const gameMaps = JSON.parse(fs.readFileSync('assets/maps/countries.json'));
+const japan = source.features.find(feature => feature.properties.ADM0_A3 === 'JPN');
+const honshu = connectedRings(japan.geometry.coordinates.map(polygon => polygon[0].slice(0,-1)))[0];
+assert(Math.min(...honshu.map(point => point[1])) < 35);
+assert(Math.max(...honshu.map(point => point[1])) > 40);
+assert(gameMaps.find(country => country.id === 'jpn').decorative_islands.length > 0);
+console.log('RESULT spherical ranking, detached land, date-line stitching and Honshu passed');

@@ -21,6 +21,8 @@ var neighbors: Array = []
 var sea_neighbors: Array = []
 var longitude: float = 0
 var latitude: float = 0
+var presentation_origin := Vector2.ZERO
+var presentation_scale: float = 1.0
 
 func build() -> void:
 	if built: return
@@ -39,6 +41,8 @@ func build() -> void:
 	# Re-normalize after corner softening so each country is 2,400 units long.
 	var factor: float = 2400.0 / maxf(land_bounds.size.x, land_bounds.size.y)
 	var origin: Vector2 = land_bounds.position
+	presentation_origin = origin
+	presentation_scale = factor
 	for i in outline.size():
 		outline[i] = (outline[i] - origin) * factor
 	for ring in decorative_islands:

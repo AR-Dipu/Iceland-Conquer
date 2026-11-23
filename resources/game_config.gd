@@ -3,8 +3,8 @@ extends Resource
 
 @export var player_speed: float = 260.0
 @export var player_acceleration: float = 2000.0
-@export var bot_speed: float = 91.0
-@export var acceleration: float = 680.0
+@export var bot_speed: float = 210.0
+@export var acceleration: float = 1600.0
 @export var win_fraction: float = 0.99
 @export var trail_spacing: float = 7.0
 @export var trail_hit_radius: float = 9.0

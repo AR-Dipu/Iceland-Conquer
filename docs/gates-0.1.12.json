@@ -1,0 +1,95 @@
+{
+  "scenarios": 30,
+  "seconds_each": 120,
+  "seeds": [
+    190,
+    7016,
+    111
+  ],
+  "countries": [
+    {
+      "country": "bgd",
+      "baseline_net_land": 0.42680278308501,
+      "hunter_net_land": 0.415315202505466,
+      "baseline_cuts": 9,
+      "hunter_cuts": 11,
+      "baseline_survival": 4,
+      "hunter_survival": 3
+    },
+    {
+      "country": "ind",
+      "baseline_net_land": 0.525759078271049,
+      "hunter_net_land": 0.436237751181704,
+      "baseline_cuts": 12,
+      "hunter_cuts": 14,
+      "baseline_survival": 3,
+      "hunter_survival": 2
+    },
+    {
+      "country": "lka",
+      "baseline_net_land": 0.539173976179901,
+      "hunter_net_land": 0.494174166846832,
+      "baseline_cuts": 16,
+      "hunter_cuts": 17,
+      "baseline_survival": 2,
+      "hunter_survival": 1
+    },
+    {
+      "country": "jpn",
+      "baseline_net_land": 0.472053377378124,
+      "hunter_net_land": 0.498920150054125,
+      "baseline_cuts": 7,
+      "hunter_cuts": 10,
+      "baseline_survival": 5,
+      "hunter_survival": 4
+    },
+    {
+      "country": "isl",
+      "baseline_net_land": 0.482458118748081,
+      "hunter_net_land": 0.324188348575115,
+      "baseline_cuts": 14,
+      "hunter_cuts": 16,
+      "baseline_survival": 2,
+      "hunter_survival": 2
+    }
+  ],
+  "baseline_cuts": 58,
+  "hunter_cuts": 68,
+  "baseline_abandoned": 165,
+  "hunter_abandoned": 191,
+  "baseline_wins": 0,
+  "hunter_wins": 0,
+  "baseline_reverse_by_action": {
+    "expand": 1909.76032319665,
+    "attack": 0,
+    "defend": 5004.918700873852,
+    "recover": 0
+  },
+  "hunter_reverse_by_action": {
+    "expand": 1207.2816682457915,
+    "attack": 18.9335021674633,
+    "defend": 4947.814878702165,
+    "recover": 0
+  },
+  "cuts_improvement": 0.17241379310344818,
+  "cuts_gate": false,
+  "no_country_land_regression": false,
+  "matched_capture": {
+    "cases": 129,
+    "baseline_p95_us": 38314,
+    "after_p95_us": 24585,
+    "improvement": 0.3583285483113222
+  },
+  "capture_gate": true,
+  "rendered_pacing": {
+    "baseline_p95_ms": 32.590303,
+    "after_p95_ms": 60.386252,
+    "improvement": -0.8528901679741978
+  },
+  "render_gate": false,
+  "full_game_cpu": {
+    "baseline_p95_ms": 2.746,
+    "after_p95_ms": 2.775,
+    "note": "Same seeded Hard workload; different AI decisions and wall-clock planning slices can produce different subsequent ownership/capture workloads. Use the matched-input corpus for isolated capture cost."
+  }
+}

@@ -2,6 +2,7 @@ class_name TerritoryManager
 extends Node2D
 
 signal territory_changed(fractions: Array[float])
+signal mesh_published
 signal captured(team: int, gain: float, at: Vector2)
 
 var config: GameConfig
@@ -33,6 +34,22 @@ var planning_deadline: int = 0
 var planning_spent_usec: int = 0
 var legacy_planning_budget: bool = false # Frozen 0.1.10 benchmark adapter only.
 var capture_effects: Node2D
+var tactical_epoch: int = -1
+var tactical_states: Dictionary = {}
+var preview_cache: Dictionary = {}
+
+func tactical_state(actor: ConquerCharacter, country: CountryMap) -> Dictionary:
+	if tactical_epoch != planning_epoch:
+		tactical_epoch = planning_epoch
+		tactical_states.clear()
+	var key := hash([actor.position,actor.velocity,regions[actor.team]])
+	if tactical_states.has(actor.team) and tactical_states[actor.team].key == key: return tactical_states[actor.team]
+	var home := safe_home(actor.team,actor.position)
+	var length: float = 0 if owned(actor.team,actor.position) else TacticalContext.route_distance(country,actor.position,home)
+	if regions[actor.team].is_empty(): length = INF
+	var state := {"home":home,"return_eta":TacticalContext.actor_eta(actor,length,actor.position.direction_to(home)),"key":key}
+	tactical_states[actor.team] = state
+	return state
 
 func begin_planning_frame() -> void:
 	planning_deadline = Time.get_ticks_usec()+2000
@@ -49,6 +66,7 @@ func begin_planning_frame() -> void:
 			var began := WorkMetrics.start()
 			var work_start := Time.get_ticks_usec()
 			job.step(planning_deadline)
+			if job.done and job.result.get("ok",false): _remember_preview(team,job.path,job.result)
 			planning_spent_usec += Time.get_ticks_usec()-work_start
 			WorkMetrics.finish("planning_preview_slice",began)
 			# Rotate fairly; one exact job is advanced per physics frame.
@@ -106,48 +124,95 @@ func boundary_segments(team: int, a: Vector2, b: Vector2) -> Array:
 			for edge in cached.cells.get(Vector2i(x,y),[]): found[edge] = true
 	return found.keys()
 
+var staged_meshes: Array = []
+var staged_organic: Dictionary = {}
+var staged_hashes: Dictionary = {}
+var mesh_jobs: Array[int] = []
+var staged_revision: int = -1
+var fill_cache: Dictionary = {}
+var last_enclosed_faces: Array = []
+var last_enclosed_pieces: Array = []
+var last_enclosed_previous: Array = []
+
+func newly_encircles(point: Vector2) -> bool:
+	for polygon in last_enclosed_previous:
+		if Geometry2D.is_point_in_polygon(point,polygon): return false
+	for face in last_enclosed_faces:
+		if not Geometry2D.is_point_in_polygon(point,face): continue
+		if point.distance_squared_to(IslandGeometry.nearest(face,point).point) <= 0.0001: continue
+		for piece in last_enclosed_pieces:
+			if Geometry2D.is_point_in_polygon(point,piece): return true
+	return false
+
+func _start_mesh_build() -> void:
+	staged_revision = revision
+	staged_meshes = mesh_teams.duplicate()
+	staged_meshes.resize(regions.size())
+	staged_organic = organic_cache.duplicate()
+	staged_hashes = mesh_hashes.duplicate()
+	mesh_jobs.clear()
+	for team in regions.size():
+		if staged_hashes.get(team,-1) != hash(regions[team]): mesh_jobs.append(team)
+
+func _build_team_mesh(team: int) -> void:
+	var fingerprint: int = hash(regions[team])
+	var pieces: Array = []
+	var edges := PackedVector2Array()
+	for p in regions[team]:
+		var indices := IslandGeometry.triangles_cached(p)
+		var mesh := _fill_mesh(p,indices)
+		pieces.append({"polygon":p,"indices":indices,"mesh":mesh})
+		for i in p.size():
+			var a: Vector2 = p[i]
+			var b: Vector2 = p[(i+1)%p.size()]
+			var normal := Vector2(-(b-a).y,(b-a).x).normalized()*0.5
+			var mid: Vector2 = (a+b)*0.5
+			if owned(team,mid+normal) and owned(team,mid-normal): continue
+			edges.append(a)
+			edges.append(b)
+	staged_meshes[team] = {"pieces":pieces,"edges":edges}
+	staged_hashes[team] = fingerprint
+
+func _fill_mesh(polygon: PackedVector2Array, indices: PackedInt32Array) -> ArrayMesh:
+	var key := hash(polygon)
+	var cached: Dictionary = fill_cache.get(key,{})
+	if cached.get("polygon") == polygon: return cached.mesh
+	var mesh := CountryPresentation._mesh(polygon,indices) if not indices.is_empty() else ArrayMesh.new()
+	if fill_cache.size() >= 128: fill_cache.erase(fill_cache.keys()[0])
+	fill_cache[key] = {"polygon":polygon.duplicate(),"mesh":mesh}
+	return mesh
+
+func _publish_meshes() -> void:
+	mesh_teams = staged_meshes
+	organic_cache = staged_organic
+	mesh_hashes = staged_hashes
+	mesh_revision = staged_revision
+	queue_redraw()
+	mesh_published.emit()
+
 func mesh_snapshot() -> Array:
 	if mesh_revision == revision: return mesh_teams
 	var began := WorkMetrics.start()
-	mesh_teams.resize(regions.size())
-	for team in regions.size():
-		var fingerprint: int = hash(regions[team])
-		if mesh_hashes.get(team,-1) == fingerprint: continue
-		mesh_hashes[team] = fingerprint
-		var pieces: Array = []
-		var edges := PackedVector2Array()
-		var smooth: Array[PackedVector2Array] = []
-		for p in regions[team]:
-			var indices := Geometry2D.triangulate_polygon(p)
-			var colors := PackedColorArray()
-			var bounds := IslandGeometry.bounds(island)
-			var color: Color = config.team_colors[team]
-			for vertex in p: colors.append(color.lightened(clampf((bounds.end.y-vertex.y)/maxf(1,bounds.size.y),0,1)*0.15))
-			var mesh := ArrayMesh.new()
-			if not indices.is_empty():
-				var arrays: Array = []
-				arrays.resize(Mesh.ARRAY_MAX)
-				arrays[Mesh.ARRAY_VERTEX] = p
-				arrays[Mesh.ARRAY_INDEX] = indices
-				arrays[Mesh.ARRAY_COLOR] = colors
-				mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays)
-			pieces.append({"polygon":p,"indices":indices,"mesh":mesh})
-			var rounded := IslandGeometry.soften(p,12)
-			for clipped in Geometry2D.intersect_polygons(rounded,p):
-				if IslandGeometry.simple(clipped): smooth.append(clipped)
-			for i in p.size():
-				var a: Vector2 = p[i]
-				var b: Vector2 = p[(i+1)%p.size()]
-				var normal := Vector2(-(b-a).y,(b-a).x).normalized()*0.5
-				var mid: Vector2 = (a+b)*0.5
-				if owned(team,mid+normal) and owned(team,mid-normal): continue
-				edges.append(a)
-				edges.append(b)
-		mesh_teams[team] = {"pieces":pieces,"edges":edges}
-		organic_cache[team] = smooth
-	mesh_revision = revision
+	if staged_revision != revision: _start_mesh_build()
+	while not mesh_jobs.is_empty(): _build_team_mesh(mesh_jobs.pop_front())
+	_publish_meshes()
 	WorkMetrics.finish("mesh_upload",began)
 	return mesh_teams
+
+func render_snapshot() -> Array:
+	if mesh_teams.is_empty() or not is_inside_tree(): return mesh_snapshot()
+	return mesh_teams
+
+func _pump_meshes() -> void:
+	if mesh_revision == revision: return
+	if staged_revision != revision: _start_mesh_build()
+	var began := WorkMetrics.start()
+	var deadline := Time.get_ticks_usec()+2000
+	while not mesh_jobs.is_empty():
+		_build_team_mesh(mesh_jobs.pop_front())
+		if Time.get_ticks_usec() >= deadline: break
+	if mesh_jobs.is_empty(): _publish_meshes()
+	WorkMetrics.finish("mesh_upload",began)
 
 func frontiers(team: int) -> Array:
 	var fingerprint: int = hash(regions[team])
@@ -172,16 +237,35 @@ func frontiers(team: int) -> Array:
 	return result
 
 func preview_capture(team: int, trail: PackedVector2Array) -> Dictionary:
+	var key := hash([team,regions[team],island,trail])
+	if preview_cache.has(key):
+		var value: Dictionary = preview_cache[key]
+		if value.path == trail and value.owned == regions[team] and value.coast == island: return value.result.duplicate(true)
+	var result := _preview_capture_exact(team,trail)
+	if result.ok: _remember_preview(team,trail,result)
+	return result
+
+func _remember_preview(team: int, trail: PackedVector2Array, result: Dictionary) -> void:
+	var key := hash([team,regions[team],island,trail])
+	if preview_cache.size() >= 8: preview_cache.erase(preview_cache.keys()[0])
+	preview_cache[key] = {"path":trail.duplicate(),"owned":regions[team].duplicate(true),"coast":island.duplicate(),"result":result.duplicate(true)}
+
+func _preview_capture_exact(team: int, trail: PackedVector2Array, prepared: Dictionary = {}) -> Dictionary:
 	var errors_before: int = IslandGeometry.subtraction_errors
-	var topology := CaptureTopology.enclosed(regions[team],trail)
+	var topology_began := WorkMetrics.start()
+	var topology := CaptureTopology.enclosed(regions[team],trail) if prepared.is_empty() else CaptureTopology.enclosed_prepared(prepared)
+	WorkMetrics.finish("capture_topology",topology_began)
 	if not topology.ok: return {"ok":false,"pieces":[],"area":0.0}
+	var enclosed_faces: Array = topology.faces.duplicate()
 	# Only a completed bridge between disconnected owned components earns a
 	# ribbon. Elimination itself never adds a connection or fills the gap.
 	if trail.size() >= 2 and _different_components(team,trail[0],trail[-1]):
 		topology.faces.append_array(Geometry2D.offset_polyline(trail,3.75,Geometry2D.JOIN_ROUND,Geometry2D.END_ROUND))
 	var pieces: Array[PackedVector2Array] = []
+	var enclosed_count := 0
 	var total: float = 0
-	for face in topology.faces:
+	for face_index in topology.faces.size():
+		var face: PackedVector2Array = topology.faces[face_index]
 		for clipped in Geometry2D.intersect_polygons(face,island):
 			var uncovered: Array[PackedVector2Array] = [clipped]
 			for existing in regions[team]:
@@ -198,9 +282,10 @@ func preview_capture(team: int, trail: PackedVector2Array) -> Dictionary:
 				if IslandGeometry.area(clean) < 8: continue
 				if not IslandGeometry.simple(clean): return {"ok":false,"pieces":[],"area":0.0}
 				pieces.append(clean)
+				if face_index < enclosed_faces.size(): enclosed_count += 1
 				total += IslandGeometry.area(clean)
 	if IslandGeometry.subtraction_errors != errors_before: return {"ok":false,"pieces":[],"area":0.0}
-	return {"ok":true,"pieces":pieces,"area":total}
+	return {"ok":true,"pieces":pieces,"area":total,"enclosed_faces":enclosed_faces,"enclosed_count":enclosed_count}
 
 func closed_excursion(team: int, route: PackedVector2Array) -> PackedVector2Array:
 	# Evaluate the same FIRST home entry that the movement coordinator closes.
@@ -286,6 +371,7 @@ func typed(polys: Array) -> Array[PackedVector2Array]:
 	return result
 
 func reset_all() -> void:
+	preview_cache.clear()
 	for team in preview_jobs.keys(): cancel_preview(team)
 	preview_round += 1
 	regions = initial.duplicate(true)
@@ -332,15 +418,18 @@ func _remove_from_others(team: int, polygon: PackedVector2Array) -> void:
 			remaining.append_array(IslandGeometry.subtract(p, polygon))
 		regions[other] = remaining
 
-func capture(team: int, trail: PackedVector2Array, departure: PackedVector2Array) -> bool:
+func capture(team: int, trail: PackedVector2Array, departure: PackedVector2Array, prepared: Dictionary = {}) -> bool:
 	var began := WorkMetrics.start()
-	var result := _capture_transaction(team,trail,departure)
+	var result := _capture_transaction(team,trail,departure,prepared)
 	WorkMetrics.finish("capture_transaction",began)
 	return result
 
-func _capture_transaction(team: int, trail: PackedVector2Array, departure: PackedVector2Array) -> bool:
+func _capture_transaction(team: int, trail: PackedVector2Array, departure: PackedVector2Array, prepared: Dictionary = {}) -> bool:
+	last_enclosed_faces = []
+	last_enclosed_pieces = []
+	last_enclosed_previous = []
 	last_capture_error = ""
-	var preview := preview_capture(team,trail)
+	var preview := preview_capture(team,trail) if prepared.is_empty() else _preview_capture_exact(team,trail,prepared)
 	if not preview.ok:
 		last_capture_error = "Capture could not be resolved; territory preserved."
 		return false
@@ -349,35 +438,32 @@ func _capture_transaction(team: int, trail: PackedVector2Array, departure: Packe
 	var errors_before: int = IslandGeometry.subtraction_errors
 	var before: float = fractions[team]
 	var additions: Array = preview.pieces
-	for addition in additions:
-		addition = IslandGeometry.clean_polygon(addition)
+	var enclosed_additions: Array = []
+	for index in additions.size():
+		var addition := IslandGeometry.clean_polygon(additions[index])
 		if not IslandGeometry.simple(addition): continue
-		# New pieces are cut against existing ownership before union, so even
-		# captures that create a hole remain disjoint and area is never doubled.
-		var uncovered: Array[PackedVector2Array] = [addition]
-		for existing in regions[team]:
-			var next: Array[PackedVector2Array] = []
-			for p in uncovered:
-				next.append_array(IslandGeometry.subtract(p, existing))
-			uncovered = next
-		for p in uncovered:
-			p = IslandGeometry.clean_polygon(p)
-			if not IslandGeometry.simple(p): continue
-			_remove_from_others(team, p)
-			regions[team].append(p)
-			flashes.append({"polygon": p, "life": 0.45, "team": team,"origin":trail[-1]})
-			if flashes.size() > 12:
-				var old: Dictionary = flashes.pop_front()
-				if is_instance_valid(old.get("node")): old.node.queue_free()
+		if index < int(preview.get("enclosed_count",0)): enclosed_additions.append(addition)
+		# preview_capture already subtracts current ownership and prior additions.
+		# No mutation/yield occurs between preview and this transaction.
+		_remove_from_others(team,addition)
+		regions[team].append(addition)
+		flashes.append({"polygon":addition,"life":0.45,"team":team,"origin":trail[-1]})
+		if flashes.size() > 12:
+			var old: Dictionary = flashes.pop_front()
+			if is_instance_valid(old.get("node")): old.node.queue_free()
+	var merge_began := WorkMetrics.start()
 	regions[team] = IslandGeometry.merge_regions(typed(regions[team]))
+	WorkMetrics.finish("capture_merge",merge_began)
 	if IslandGeometry.subtraction_errors != errors_before:
 		regions = snapshot
 		_clear_flashes()
 		if is_instance_valid(capture_effects): capture_effects.queue_redraw()
 		last_capture_error = "Capture precision could not be resolved; territory preserved."
 		return false
-	for polys in regions:
-		for p in polys:
+	for other in regions.size():
+		# Unchanged teams were validated in the previous committed snapshot.
+		if regions[other] == snapshot[other]: continue
+		for p in regions[other]:
 			if not IslandGeometry.simple(p):
 				regions = snapshot
 				_clear_flashes()
@@ -387,6 +473,9 @@ func _capture_transaction(team: int, trail: PackedVector2Array, departure: Packe
 
 	_update_fractions()
 	if fractions[team] > before + 0.0001:
+		last_enclosed_faces = preview.get("enclosed_faces", [])
+		last_enclosed_pieces = enclosed_additions
+		last_enclosed_previous = snapshot[team]
 		captured.emit(team, fractions[team] - before, trail[-1])
 		return true
 	return false
@@ -411,6 +500,9 @@ func _update_fractions() -> void:
 	queue_redraw()
 
 func _process(delta: float) -> void:
+	_pump_meshes()
+	if not get_parent().can_process(): return
+	if mesh_revision != revision: return
 	if flashes.is_empty():
 		return
 	if not is_instance_valid(capture_effects):
@@ -433,14 +525,8 @@ func _clear_flashes() -> void:
 
 func _upload_effect(flash: Dictionary) -> void:
 	var began := WorkMetrics.start()
-	var arrays: Array = []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = flash.polygon
-	arrays[Mesh.ARRAY_INDEX] = Geometry2D.triangulate_polygon(flash.polygon)
-	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays)
 	var instance := MeshInstance2D.new()
-	instance.mesh = mesh
+	instance.mesh = _fill_mesh(flash.polygon,IslandGeometry.triangles_cached(flash.polygon))
 	var material := ShaderMaterial.new()
 	material.shader = preload("res://assets/shaders/capture_reveal.gdshader")
 	material.set_shader_parameter("tint",config.team_colors[flash.team].lightened(0.65))
@@ -454,18 +540,14 @@ func _upload_effect(flash: Dictionary) -> void:
 func _draw() -> void:
 	if config == null:
 		return
-	var snapshot := mesh_snapshot()
-	for team in regions.size():
+	var snapshot := render_snapshot()
+	for team in snapshot.size():
 		var color: Color = config.team_colors[team]
 		for piece in snapshot[team].pieces:
 			if not piece.indices.is_empty():
-				draw_mesh(piece.mesh,null)
-		# A clipped rounded overlay softens sharp capture corners without changing
-		# authoritative territory or painting across a rival's boundary.
-		for rounded in organic_cache.get(team,[]):
-			draw_colored_polygon(rounded,Color(color.lightened(0.12),0.3))
+				draw_mesh(piece.mesh,null,Transform2D.IDENTITY,Color(color,0.63))
 		var edges: PackedVector2Array = snapshot[team].edges
 		if not edges.is_empty():
-			draw_multiline(edges,Color(color.lightened(0.45),0.08),8.0,true)
-			draw_multiline(edges,Color(color.lightened(0.55),0.55),1.4,true)
+			draw_multiline(edges,Color(color.darkened(0.5),0.82),2.8,true)
+			draw_multiline(edges,Color(color.lightened(0.30),0.75),1.0,true)
 

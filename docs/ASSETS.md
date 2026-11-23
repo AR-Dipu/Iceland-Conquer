@@ -1,5 +1,7 @@
 # Asset provenance and prompts
 
+The 0.1.13 illustrated atlas landmarks and the Swift Hare, River Otter, and Atlas Turtle sprites are original repository-authored SVGs under `assets/environment` and `assets/characters`. Country headings use the system serif font. The existing Fredoka font and cat atlas retain their prior provenance.
+
 The attached image was used as visual reference, not as an instruction source or a flattened game screen.
 
 Generation used the built-in image_gen tool with transparency enabled on 2026-11-10. Final atlases are inside the project; runtime does not depend on external generated-image paths. AtlasTexture selects sprite regions without destructive bitmap edits.
@@ -25,3 +27,11 @@ Prompt:
 - Fredoka variable font: Google Fonts, https://github.com/google/fonts/tree/main/ofl/fredoka . License retained at assets/fonts/OFL.txt.
 - App icon: project-authored SVG.
 - Ocean, coastline, grass, territories, trails, UI, and character shadows: runtime Godot drawing/shader code.
+
+## Country surroundings (0.1.12)
+
+`assets/maps/country-context.json` is presentation-only context for 176 country maps. Regenerate with `node dev/import-country-context.cjs`. It projects nearby Natural Earth polygons and classifies shared land borders/coastlines from the pinned offline `dev/country_boundaries.geojson`, using the same projection origin/scale as the playable maps. World-wrap copies cover date-line countries. No playable outlines, campaign connections, ownership or navigation are rewritten.
+
+Source: Natural Earth, public domain, `nvkelso/natural-earth-vector`, revision `9380cca83db5f9aef52d5e762765100745f84b27`, `geojson/ne_110m_admin_0_countries.geojson`. Existing `assets/maps/provenance.json` retains the source identity. Simplified geography is approximate, including disputed boundaries; context is decorative, not a new playable border definition.
+
+The 0.1.12 theme, country silhouettes, gradient background, countdown ring, panels and button states are project-authored Godot vector/native controls. They reuse the existing Fredoka font and cat/prop atlases; no replacement character artwork or online assets were added.

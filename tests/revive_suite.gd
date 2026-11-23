@@ -31,13 +31,16 @@ func run() -> void:
 	input.release()
 	verify(not input.has_target, "Release clears steering")
 	game.territory.fractions[0] = 0.989
-	game._captured(0, 0.01, Vector2.ZERO)
+	game._check_victory(0)
 	verify(game.running, "No early victory below 99 percent")
 	game.territory.regions[0] = [game.island]
 	game.territory.regions[1] = []
 	game.territory.regions[2] = []
 	game.territory._update_fractions()
-	game._captured(0, 0.001, Vector2.ZERO)
+	game._check_victory(0)
+	verify(game.running, "Full ownership with live rivals keeps the match running")
+	for rival in game.actors.slice(1): rival.active = false
+	game._check_victory(0)
 	verify(game.state == game.State.ROUND_OVER, "Full ownership wins")
 	game.campaign.conquered.clear()
 	game.start_round()

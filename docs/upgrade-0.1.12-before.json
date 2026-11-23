@@ -1,0 +1,6 @@
+{
+  "old_version": "0.1.11",
+  "package": "com.islandconquer.prototype",
+  "campaign": "[profile]\n\nname=\"Captain\"\n\n[campaign]\n\nstarting=\"bgd\"\nconquered=Array[String]([])",
+  "wallet": "{\"balance\":160,\"claims\":{\"daily:20769\":0.0,\"daily:20773\":20.0,\"daily:20776\":20.0,\"daily:20779\":20},\"version\":1.0}"
+}

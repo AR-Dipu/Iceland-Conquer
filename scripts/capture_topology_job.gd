@@ -51,8 +51,8 @@ func _run() -> void:
 		if Time.get_ticks_usec() >= deadline: await continued
 		if canceled: _finish({"ok":false,"faces":[]}); return
 		var s: Dictionary = segments[i]
-		var lo := Vector2i(floori((minf(s.a.x,s.b.x)-0.001)/128),floori((minf(s.a.y,s.b.y)-0.001)/128))
-		var hi := Vector2i(floori((maxf(s.a.x,s.b.x)+0.001)/128),floori((maxf(s.a.y,s.b.y)+0.001)/128))
+		var lo := Vector2i(floori((minf(s.a.x,s.b.x)-0.001)/16),floori((minf(s.a.y,s.b.y)-0.001)/16))
+		var hi := Vector2i(floori((maxf(s.a.x,s.b.x)+0.001)/16),floori((maxf(s.a.y,s.b.y)+0.001)/16))
 		var peers: Dictionary = {}
 		for x in range(lo.x,hi.x+1):
 			if Time.get_ticks_usec() >= deadline: await continued

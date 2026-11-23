@@ -1,6 +1,10 @@
-# Country Conquer 0.1.11
+# Country Conquer 0.1.13
 
-Version code 12. [Android APK](builds/android/country-conquer-v0.1.11.apk). Productive frontier routes, first-return overlap validation, resumable capture previews, shared shoreline/trail indexes, and cached trail, terrain and capture-effect rendering. Human controls, speeds, economy, saves and package/signing identity are preserved. Measurements and limits are recorded in docs/UPDATE-0.1.11.md.
+Version code 14. [Android candidate APK](builds/android/country-conquer-v0.1.13.apk). The illustrated atlas adds an animal character shop, passive abilities, and a gesture-only campaign map. Capture topology prepares intersections during excursions, and the battle map and minimap reuse the same territory meshes. See [0.1.13 verification](docs/UPDATE-0.1.13.md) for benchmark gates and device limits.
+
+Version code 13. [Android candidate APK](builds/android/country-conquer-v0.1.12.apk). Shared navy/purple/gold theme, responsive country-name banners, geographic neighboring land and actual coastlines, reachable trail interceptions, counter-interception defense, exact geometry caches, spatial capture filtering and atomic staged map/minimap rendering. Human controls, speeds, economy, saves and package/signing identity are preserved. Release gates and remaining performance/AI limits are recorded in docs/UPDATE-0.1.12.md; a successful build is not evidence that every improvement target passed.
+
+Run `dev/test-0112.ps1` for focused headless regressions. `tests/contested_0112_suite.gd -- fresh` compares the complete frozen 0.1.11 AI and current Hunter AI using the same shared geometry and seeds. Internal Android layouts use an isolated debug profile through `dev/internal-layout-0112.ps1`; no desktop app windows are needed.
 
 Previous release 0.1.10 added shared AI planning budgets, spatially filtered capture topology, per-team mesh caches, and completed-trail connections between separate owned patches. See docs/UPDATE-0.1.10.md for that release's measurements and upgrade validation.
 
@@ -14,7 +18,7 @@ World campaign: 176 offline country/territory maps, continent filters, search, m
 
 Persistent offline coins and demo rewards: start with 100 coins; first country completion earns 25, or 250 total after the optional three-second demo. Coin revival costs 100/150/200 per match. Restart is always free. See docs/UPDATE-0.1.4.md and tests/economy_suite.gd.
 
-Open Launch Game.cmd to play or Open Editor.cmd to edit. Android APK: builds/android/country-conquer-v0.1.11.apk. The build script derives the filename from export_presets.cfg.
+Android APK: builds/android/country-conquer-v0.1.12.apk. The build script derives the filename from export_presets.cfg. Validation uses headless checks and a no-window emulator.
 
 Choose a country and press Play. The crowned purple cat uses your saved name. Touch anywhere outside the UI, then drag from that initial point to steer. Hold to keep moving; release or return to the origin to stop. WASD and mouse dragging are supported. Actual ownership of 99% or more wins, displayed as 100%.
 

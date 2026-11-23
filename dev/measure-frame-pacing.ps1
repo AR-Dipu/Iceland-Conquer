@@ -1,4 +1,4 @@
-param([string]$Label = 'after', [int]$Seconds = 30)
+param([string]$Label = 'after', [int]$Seconds = 30, [string]$Version = '0.1.11')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $adb = 'D:\irinfo\Wanderide App Automation\.tools\android-sdk\platform-tools\adb.exe'
@@ -37,7 +37,7 @@ $report = [ordered]@{
     over_33ms = @($intervals | Where-Object { $_ -gt 33.4 }).Count
     timestamps_ns = $ordered
 }
-$path = Join-Path $root ('docs/frame-pacing-0.1.11-'+$Label+'.json')
+$path = Join-Path $root ('docs/frame-pacing-'+$Version+'-'+$Label+'.json')
 $report | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $path
 $report.Remove('timestamps_ns')
 $report | ConvertTo-Json

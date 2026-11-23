@@ -7,6 +7,11 @@ signal bonus_requested(country_id: String)
 var catalog: CountryCatalog
 var campaign: CampaignProgress
 var wallet: PracticeWallet
+const Collection = preload("res://scripts/character_collection.gd")
+var collection: Collection
+var shop: Panel
+var shop_status: Label
+var shop_actions: Dictionary = {}
 var bonus_button: Button
 var selected: CountryMap
 var font: FontVariation
@@ -33,43 +38,54 @@ var redraw_clock: float = 0
 var geometry_cache: Dictionary = {}
 var cache_transform := Vector3.INF
 var difficulties: Array[Button] = []
-const MAP := Rect2(28,250,664,700)
+var country_banner: CountryBanner
+var route_layer: Node2D
+const MAP := Rect2(28,328,664,464)
 
 func setup(data: CountryCatalog, typeface: FontVariation) -> void:
 	catalog = data
+	theme = ConquestTheme.get_theme()
 	font = typeface
 	size = Vector2(720,1280)
 	name_edit = LineEdit.new()
-	name_edit.position = Vector2(28,170)
-	name_edit.size = Vector2(370,54)
+	name_edit.position = Vector2(28,172)
+	name_edit.size = Vector2(322,136)
 	name_edit.text = campaign.player_name
 	name_edit.max_length = 16
 	add_child(name_edit)
-	save_button = button("SAVE",Rect2(412,170,130,54),save_name)
-	cancel_button = button("CANCEL",Rect2(552,170,140,54),cancel_name)
+	save_button = button("SAVE",Rect2(368,172,144,136),save_name)
+	cancel_button = button("CANCEL",Rect2(526,172,166,136),cancel_name)
 	name_edit.text_submitted.connect(func(_value: String) -> void: save_name())
 	name_display = Label.new()
-	name_display.position = Vector2(28,176)
-	name_display.size = Vector2(440,48)
+	name_display.position = Vector2(46,207)
+	name_display.size = Vector2(530,54)
 	name_display.add_theme_font_override("font",font)
 	name_display.add_theme_font_size_override("font_size",27)
 	add_child(name_display)
-	edit_button = button("",Rect2(478,170,58,54),begin_name_edit)
+	edit_button = button("",Rect2(556,172,136,136),begin_name_edit)
 	edit_button.tooltip_text = "Edit name"
 	edit_button.draw.connect(func() -> void:
-		edit_button.draw_line(Vector2(18,36),Vector2(39,15),Color("fff0bc"),5,true)
-		edit_button.draw_line(Vector2(16,40),Vector2(23,38),Color("fff0bc"),2,true))
+		edit_button.draw_line(Vector2(30,65),Vector2(62,33),Color("fff0bc"),5,true)
+		edit_button.draw_line(Vector2(27,69),Vector2(39,66),Color("fff0bc"),2,true))
 	set_name_mode(not campaign.name_saved)
 	if FileAccess.file_exists("res://assets/maps/continent_borders.json"):
 		continent_borders = JSON.parse_string(FileAccess.get_file_as_string("res://assets/maps/continent_borders.json"))
 	for i in 3:
 		var value: int = i
-		difficulties.append(button(["EASY · 3","MEDIUM · 5","HARD · 7"][i],Rect2(28+i*226,1050,212,48),func() -> void: difficulty(value)))
-	play_button = button("PLAY",Rect2(28,1115,664,77),func() -> void:
+		difficulties.append(button(["EASY · 3","MEDIUM · 5","HARD · 7"][i],Rect2(28+i*226,936,212,136),func() -> void: difficulty(value)))
+	play_button = button("START CONQUEST",Rect2(28,1080,664,136),func() -> void:
 		if can_play(): play_requested.emit())
-	bonus_button = button("DEMO · CLAIM +225",Rect2(350,968,342,52),func() -> void: bonus_requested.emit(selected.country_id))
-	button("+",Rect2(624,270,48,48),func() -> void: zoom_at(zoom*1.3,MAP.get_center()))
-	button("−",Rect2(624,328,48,48),func() -> void: zoom_at(zoom/1.3,MAP.get_center()))
+	bonus_button = button("DEMO · CLAIM +225",Rect2(292,648,380,136),func() -> void: bonus_requested.emit(selected.country_id))
+	button("CHARACTERS",Rect2(435,4,257,136),open_shop)
+	route_layer = Node2D.new()
+	route_layer.material = ShaderMaterial.new()
+	route_layer.material.shader = preload("res://assets/shaders/trail_glow.gdshader")
+	route_layer.draw.connect(_draw_routes)
+	add_child(route_layer)
+	country_banner = CountryBanner.new()
+	country_banner.position = Vector2(28,808)
+	country_banner.size = Vector2(664,112)
+	add_child(country_banner)
 	difficulty(0)
 	var initial := "bgd"
 	if not campaign.starting.is_empty(): initial = campaign.starting
@@ -80,12 +96,89 @@ func setup(data: CountryCatalog, typeface: FontVariation) -> void:
 				break
 	select(initial)
 	if campaign.starting.is_empty() and campaign.conquered.is_empty(): message = "Choose your country: tap the map, then confirm."
+	_build_shop()
+
+func _build_shop() -> void:
+	shop = Panel.new()
+	shop.size = size
+	shop.add_theme_stylebox_override("panel", ConquestTheme.panel(ConquestTheme.INK, ConquestTheme.GOLD))
+	add_child(shop)
+	_shop_label("Characters", Vector2(34,32), 44).add_theme_font_override("font",ConquestTheme.heading_font())
+	shop_status = _shop_label("", Vector2(34,96), 24)
+	var row := 0
+	for id in Collection.CATALOG:
+		var entry: Array = Collection.CATALOG[id]
+		var y := 158 + row * 225
+		var card := Panel.new()
+		card.position = Vector2(24,y)
+		card.size = Vector2(672,204)
+		card.add_theme_stylebox_override("panel", ConquestTheme.panel())
+		shop.add_child(card)
+		var portrait := TextureRect.new()
+		portrait.texture = Collection.artwork(id)
+		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		portrait.position = Vector2(42,y+33)
+		portrait.size = Vector2(125,125)
+		shop.add_child(portrait)
+		_shop_label(entry[0], Vector2(178,y+20), 29)
+		_shop_label(entry[2] + "\n" + entry[3], Vector2(178,y+68), 21)
+		var action := Button.new()
+		action.position = Vector2(470,y+38)
+		action.size = Vector2(204,128)
+		ConquestTheme.style_button(action,true)
+		action.pressed.connect(func() -> void: _shop_action(id))
+		shop.add_child(action)
+		shop_actions[id] = action
+		row += 1
+	var close := Button.new()
+	close.text = "WORLD MAP"
+	close.position = Vector2(24,1110)
+	close.size = Vector2(672,128)
+	ConquestTheme.style_button(close)
+	close.pressed.connect(func() -> void: shop.hide())
+	shop.add_child(close)
+	shop.hide()
+
+func _shop_label(value: String, at: Vector2, pixels: int) -> Label:
+	var label := Label.new()
+	label.text = value
+	label.position = at
+	label.add_theme_font_size_override("font_size", pixels)
+	shop.add_child(label)
+	return label
+
+func open_shop() -> void:
+	fingers.clear()
+	dragging = false
+	multitouch = false
+	name_edit.release_focus()
+	shop.show()
+	_refresh_shop()
+
+func _refresh_shop(message_text: String = "") -> void:
+	shop_status.text = "%d coins" % wallet.balance
+	if not message_text.is_empty(): shop_status.text += "   ·   " + message_text
+	for id in shop_actions:
+		var action: Button = shop_actions[id]
+		action.disabled = id == collection.equipped
+		action.text = "EQUIPPED" if action.disabled else "EQUIP" if collection.owns(id) else "BUY\n%d COINS" % Collection.CATALOG[id][1]
+
+func _shop_action(id: String) -> void:
+	if collection.owns(id):
+		_refresh_shop("Character equipped" if collection.equip(id) else "Could not save equipment")
+	elif wallet.balance < Collection.CATALOG[id][1]:
+		_refresh_shop("Need %d more coins" % (Collection.CATALOG[id][1] - wallet.balance))
+	elif collection.buy(id):
+		_refresh_shop("Unlocked · Equip to play")
+	else:
+		_refresh_shop("Purchase could not be saved")
 
 func can_play() -> bool:
 	return selected != null and campaign.can_attack(selected.country_id,catalog) and (not campaign.starting.is_empty() or not campaign.conquered.is_empty() or first_choice_made)
 
 func difficulty(value: int) -> void:
-	for i in difficulties.size(): difficulties[i].add_theme_stylebox_override("normal",box(Color("884ddd") if i == value else Color("14546f")))
+	for i in difficulties.size(): difficulties[i].add_theme_stylebox_override("normal",ConquestTheme.panel(ConquestTheme.PURPLE if i == value else ConquestTheme.PANEL,ConquestTheme.GOLD if i == value else Color("45617e")))
 	difficulty_changed.emit(value)
 
 func set_name_mode(edit: bool) -> void:
@@ -121,16 +214,21 @@ func zoom_at(value: float, point: Vector2) -> void:
 	zoom = clampf(value,1,8)
 	pan = point-MAP.get_center()-before*zoom
 	pan = pan.clamp(-MAP.size*(zoom-1)*0.5,MAP.size*(zoom-1)*0.5)
+	queue_redraw()
+	if route_layer != null: route_layer.queue_redraw()
 
 func select(id: String) -> void:
 	var country := catalog.find(id)
 	if country == null: return
 	selected = country
+	country_banner.set_country(country,"COUNTRY CONQUEST · CLAIM YOUR LEGACY")
+	queue_redraw()
+	route_layer.queue_redraw()
 	country_selected.emit(id)
 	play_button.disabled = not can_play()
 	bonus_button.visible = wallet != null and wallet.claimed("country:"+id) and not wallet.claimed("bonus:"+id)
-	play_button.text = "CONQUERED" if campaign.conquered.has(id) else "PLAY · "+country.display_name if not play_button.disabled else "LOCKED · CONQUER A NEIGHBOR"
-	if campaign.starting.is_empty() and campaign.conquered.is_empty(): play_button.text = "CONFIRM · "+country.display_name if first_choice_made else "CHOOSE YOUR COUNTRY ON THE MAP"
+	play_button.text = "CONQUERED" if campaign.conquered.has(id) else "START CONQUEST" if not play_button.disabled else "LOCKED · CONQUER A NEIGHBOR"
+	if campaign.starting.is_empty() and campaign.conquered.is_empty(): play_button.text = "CONFIRM CONQUEST" if first_choice_made else "CHOOSE YOUR COUNTRY ON THE MAP"
 	message = ""
 	if play_button.disabled and not campaign.conquered.has(id):
 		var names: Array[String] = []
@@ -140,37 +238,20 @@ func select(id: String) -> void:
 		message = "Connected to: " + ", ".join(names.slice(0,4))
 
 func box(color: Color) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = color
-	style.border_color = Color("46bacd")
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(18)
-	style.shadow_size = 7
-	style.shadow_color = Color(0,0.06,0.15,0.3)
-	return style
+	return ConquestTheme.panel(color)
 
 func button(label: String, rect: Rect2, action: Callable) -> Button:
 	var control := Button.new()
 	control.text = label
 	control.position = rect.position
 	control.size = rect.size
-	control.focus_mode = Control.FOCUS_NONE
-	control.add_theme_font_override("font",font)
-	control.add_theme_font_size_override("font_size",19)
-	control.add_theme_stylebox_override("normal",box(Color("14546f")))
-	control.add_theme_stylebox_override("hover",box(Color("884ddd")))
-	control.add_theme_stylebox_override("pressed",box(Color("6036aa")))
+	ConquestTheme.style_button(control,label.begins_with("START") or label == "SAVE" or label.begins_with("DEMO"))
 	control.pressed.connect(action)
 	add_child(control)
 	return control
 
 func _process(delta: float) -> void:
-	if not visible: return
 	pulse += delta
-	redraw_clock += delta
-	if redraw_clock >= 0.08:
-		redraw_clock = 0
-		queue_redraw()
 
 func world_point(p: Vector2) -> Vector2:
 	# Mercator projection keeps country shapes recognizable in the taller map.
@@ -180,6 +261,8 @@ func world_point(p: Vector2) -> Vector2:
 	return MAP.get_center()+base*zoom+pan
 
 func _gui_input(event: InputEvent) -> void:
+	queue_redraw()
+	if route_layer != null: route_layer.queue_redraw()
 	if event is InputEventMouseButton:
 		if not MAP.has_point(event.position): return
 		if event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN] and event.pressed: zoom_at(zoom*(1.2 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1/1.2),event.position)
@@ -245,11 +328,12 @@ func text(value: String, point: Vector2, pixels: int, tint: Color = Color("edfcf
 
 func _draw() -> void:
 	if catalog == null: return
-	text("COUNTRY CONQUER",Vector2(28,77),39,Color("ffe49a"))
-	text("WORLD CAMPAIGN · %d / %d CONQUERED" % [campaign.conquered.size(),catalog.maps.size()],Vector2(30,120),18,Color("bcf5ee"))
-	if wallet != null: text("%d COINS" % wallet.balance,Vector2(535,155),15,Color("ffe49a"))
-	text("YOUR NAME",Vector2(30,155),13,Color("cbb5ff"))
-	draw_style_box(box(Color("07536d")),MAP)
+	draw_string(ConquestTheme.heading_font(),Vector2(28,77),"Country Conquer",HORIZONTAL_ALIGNMENT_LEFT,-1,38,ConquestTheme.INK)
+	text("WORLD CAMPAIGN · %d / %d CONQUERED" % [campaign.conquered.size(),catalog.maps.size()],Vector2(30,115),18,ConquestTheme.INK)
+	draw_style_box(ConquestTheme.panel(),Rect2(28,132,664,180))
+	if wallet != null: text("%d COINS" % wallet.balance,Vector2(510,168),17,Color("ffe49a"))
+	text("YOUR NAME",Vector2(46,160),13,Color("cbb5ff"))
+	draw_style_box(box(Color("384e50")),MAP)
 	var rect_poly := PackedVector2Array([MAP.position,Vector2(MAP.end.x,MAP.position.y),MAP.end,Vector2(MAP.position.x,MAP.end.y)])
 	var transform_key := Vector3(pan.x,pan.y,zoom)
 	if transform_key != cache_transform:
@@ -266,8 +350,8 @@ func _draw() -> void:
 	for country in catalog.maps:
 		var owned := campaign.conquered.has(country.country_id)
 		var available := campaign.can_attack(country.country_id,catalog)
-		var color := Color("9b5cff") if owned else Color("80dba6") if available else Color("3d7e8f")
-		if country == selected: color = color.lightened(0.16+sin(pulse*2)*0.05)
+		var color := Color("9b5cff") if owned else Color("b0b885") if available else Color("777d68")
+		if country == selected: color = ConquestTheme.GOLD
 		if not geometry_cache.has(country.country_id):
 			var pieces: Array[PackedVector2Array] = []
 			for ring in country.map_rings:
@@ -282,15 +366,17 @@ func _draw() -> void:
 			border.append(piece[0])
 			draw_polyline(border,Color("dcffe5") if country == selected else Color(0.1,0.3,0.4,0.55),1.5 if country == selected else 0.6,true)
 	if not continent_lines.is_empty(): draw_multiline(continent_lines,Color("c4efe1"),2.2,true)
-	if selected != null:
-		for id in selected.sea_neighbors:
-			var neighbor := catalog.find(id)
-			if neighbor == null: continue
-			var a := world_point(Vector2(selected.longitude,selected.latitude))
-			var b := world_point(Vector2(neighbor.longitude,neighbor.latitude))
-			if not MAP.has_point(a) or not MAP.has_point(b): continue
-			for i in 12: draw_circle(a.lerp(b,float(i)/12),2+sin(pulse*3-i)*0.5,Color("ffe6a0"))
-		text(selected.display_name.left(22 if bonus_button.visible else 34),Vector2(30,1000),26,Color("ffe49a"))
-	text(message.left(80),Vector2(30,1030),14,Color("cfece9"))
-	text("TAP A COUNTRY · DRAG / PINCH TO EXPLORE",Vector2(42,932),13)
-	text("Conquer neighbors. Follow sea routes. Rule the world.",Vector2(30,1230),17,Color("c8efed"))
+	text(message.left(80),Vector2(30,930),14,Color("cfece9"))
+	text("TAP A COUNTRY · DRAG / PINCH TO EXPLORE",Vector2(42,779),13)
+	text("CONQUER COUNTRIES. RULE THE WORLD.",Vector2(30,1248),17,ConquestTheme.INK)
+
+
+func _draw_routes() -> void:
+	if selected == null: return
+	for id in selected.sea_neighbors:
+		var neighbor := catalog.find(id)
+		if neighbor == null: continue
+		var a := world_point(Vector2(selected.longitude,selected.latitude))
+		var b := world_point(Vector2(neighbor.longitude,neighbor.latitude))
+		if not MAP.has_point(a) or not MAP.has_point(b): continue
+		for i in 12: route_layer.draw_circle(a.lerp(b,float(i)/12),2.2,ConquestTheme.GOLD)

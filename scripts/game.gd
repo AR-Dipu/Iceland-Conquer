@@ -39,7 +39,14 @@ var ad_return: State = State.DEFEATED
 var campaign := CampaignProgress.new()
 var player_names: Array[String] = []
 var profile_path: String = "user://"
+const Collection = preload("res://scripts/character_collection.gd")
+var collection := Collection.new()
+var match_character := "cat"
 var arrival_elapsed: float = 0
+var newcomer_serial := 0
+var telemetry := RoundTelemetry.new()
+var ocean: TropicalOcean
+var internal_preview: Dictionary = {}
 
 func revival_price() -> int:
 	return wallet.settings.revival_prices[mini(coin_revives, wallet.settings.revival_prices.size() - 1)]
@@ -52,6 +59,13 @@ func _wallet_ui() -> void:
 	hud.refresh_economy()
 
 func _ready() -> void:
+	# Debug-only layout fixtures use a separate profile, never the real wallet.
+	if OS.is_debug_build() and FileAccess.file_exists("user://internal_preview.json"):
+		var value: Variant = JSON.parse_string(FileAccess.get_file_as_string("user://internal_preview.json"))
+		if value is Dictionary:
+			internal_preview = value
+			profile_path = "user://internal-preview/"
+		DirAccess.remove_absolute(OS.get_user_data_dir()+"/internal_preview.json")
 	get_tree().quit_on_go_back = false
 	reward = DemoRewardService.new()
 	add_child(reward)
@@ -61,7 +75,8 @@ func _ready() -> void:
 	var ocean_layer := CanvasLayer.new()
 	ocean_layer.layer = -100
 	add_child(ocean_layer)
-	ocean_layer.add_child(TropicalOcean.new())
+	ocean = TropicalOcean.new()
+	ocean_layer.add_child(ocean)
 	var ui_layer := CanvasLayer.new()
 	ui_layer.layer = 100
 	add_child(ui_layer)
@@ -73,6 +88,7 @@ func _ready() -> void:
 	ui_root.add_child(hud)
 	hud.setup(config)
 	wallet.open(profile_path + "practice_wallet.json")
+	collection.open(wallet, profile_path + "equipped_character.txt")
 	wallet.daily_login()
 	campaign.path = profile_path + "campaign.cfg"
 	campaign.open(wallet)
@@ -91,6 +107,7 @@ func _ready() -> void:
 	selector.campaign = campaign
 	selector.wallet = wallet
 	ui_root.add_child(selector)
+	selector.collection = collection
 	selector.setup(catalog, hud.font)
 	selector.country_selected.connect(_country_selected)
 	selector.play_requested.connect(start_round)
@@ -103,6 +120,67 @@ func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--capture-preview="):
 			preview_path = arg.trim_prefix("--capture-preview=")
+	_warm_materials()
+	if not internal_preview.is_empty(): _apply_internal_preview.call_deferred()
+
+func _apply_internal_preview() -> void:
+	var id := str(internal_preview.get("country","bgd"))
+	if catalog.find(id) == null: id = "bgd"
+	campaign.starting = id
+	campaign.player_name = str(internal_preview.get("name","Captain"))
+	campaign.name_saved = true
+	selector.set_name_mode(false)
+	selector.select(id)
+	selected_country = id
+	difficulty = clampi(int(internal_preview.get("difficulty",2)),0,2)
+	selector.difficulty(difficulty)
+	var mode := str(internal_preview.get("mode","selection"))
+	if mode == "shop":
+		selector.open_shop()
+	elif mode != "selection":
+		start_round()
+		if mode == "paused": _set_state(State.PAUSED)
+		elif mode == "defeated": _set_state(State.DEFEATED)
+		elif mode == "demo_ad": _set_state(State.DEMO_AD)
+		elif mode == "round_over":
+			winning_team = 0
+			_set_state(State.ROUND_OVER)
+	if internal_preview.get("insufficient",false):
+		hud.coin_balance = 40
+		hud.coin_button.disabled = true
+	if internal_preview.get("editing",false): selector.begin_name_edit()
+	print("INTERNAL_PREVIEW ",mode," ",id)
+
+func _warm_materials() -> void:
+	var viewport := SubViewport.new()
+	viewport.size = Vector2i(32,32)
+	viewport.disable_3d = true
+	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+	add_child(viewport)
+	var mesh := MeshInstance2D.new()
+	var quad := QuadMesh.new()
+	quad.size = Vector2(32,32)
+	mesh.mesh = quad
+	mesh.position = Vector2(16,16)
+	var shader := ShaderMaterial.new()
+	shader.shader = preload("res://assets/shaders/capture_reveal.gdshader")
+	shader.set_shader_parameter("tint",Color.WHITE)
+	shader.set_shader_parameter("progress",0.5)
+	mesh.material = shader
+	viewport.add_child(mesh)
+	for texture in [preload("res://assets/characters/cats.png"),preload("res://assets/environment/atlas_landmarks.svg")]:
+		var sprite := Sprite2D.new()
+		sprite.texture = texture
+		sprite.scale = Vector2.ONE*0.01
+		viewport.add_child(sprite)
+	var line := Line2D.new()
+	line.points = PackedVector2Array([Vector2(0,16),Vector2(32,16)])
+	line.width = 8
+	var glow := ShaderMaterial.new()
+	glow.shader = preload("res://assets/shaders/trail_glow.gdshader")
+	line.material = glow
+	viewport.add_child(line)
+	get_tree().create_timer(0.5).timeout.connect(viewport.queue_free)
 
 func _layout() -> void:
 	if not is_instance_valid(ui_root):
@@ -127,6 +205,7 @@ func _country_selected(country_id: String) -> void:
 		selected_country = country_id
 
 func _set_state(next: State) -> void:
+	if is_instance_valid(ocean): ocean.set_campaign_mode(next in [State.SELECTION,State.LOADING])
 	state = next
 	var labels: Array[String] = ["selection", "loading", "playing", "paused", "round_over", "defeated", "demo_ad"]
 	hud.set_mode(labels[state], winning_team)
@@ -184,13 +263,15 @@ func load_country(country_id: String) -> bool:
 	world_root.add_child(world)
 	world.setup(current_map)
 	territory = TerritoryManager.new()
+	territory.process_mode = Node.PROCESS_MODE_ALWAYS
 	world_root.add_child(territory)
 	territory.setup(config, current_map)
 	territory.territory_changed.connect(hud.update_scores)
-	territory.captured.connect(_captured)
+	territory.captured.connect(_capture_committed)
 	for team in config.spawn_points.size():
 		var actor: ConquerCharacter = CHARACTER_SCENE.instantiate()
 		actor.setup(team, config)
+		if team == 0: actor.apply_character(match_character)
 		world_root.add_child(actor.trail)
 		world_root.add_child(actor)
 		actor.reset_actor()
@@ -251,9 +332,12 @@ func start_round() -> void:
 	coin_revives = 0
 	active_seconds = 0
 	arrival_elapsed = 0
+	newcomer_serial = 0
 	match_id = Crypto.new().generate_random_bytes(16).hex_encode()
+	telemetry.reset()
+	if not replay: match_character = collection.equipped
 	if not load_country(selected_country):
-		selector.message = "This island could not load. Choose another."
+		selector.message = "Country unavailable. Choose another target."
 		_set_state(State.SELECTION)
 		return
 	selector.message = ""
@@ -289,9 +373,6 @@ func _physics_process(delta: float) -> void:
 		return
 	territory.begin_planning_frame()
 	arrival_elapsed += delta
-	if arrival_elapsed >= 30:
-		arrival_elapsed = fmod(arrival_elapsed,30)
-		try_newcomer()
 	for actor in actors:
 		if not actor.active:
 			continue
@@ -304,8 +385,16 @@ func _physics_process(delta: float) -> void:
 			if direction == Vector2.ZERO:
 				actor.velocity = Vector2.ZERO
 		else:
+			var began := Time.get_ticks_usec()
+			var abandoned: int = brains[actor.team].abandoned_loops
+			var idle: float = brains[actor.team].idle_seconds
 			direction = brains[actor.team].steer(actor, territory, current_map, delta)
+			if telemetry.enabled:
+				telemetry.planning_usec += Time.get_ticks_usec()-began
+				if brains[actor.team].abandoned_loops > abandoned: telemetry.record("abandoned",{"team":actor.team,"count":brains[actor.team].abandoned_loops-abandoned,"reason":brains[actor.team].tactical_action})
+				if brains[actor.team].idle_seconds > idle: telemetry.record("wait",{"team":actor.team,"seconds":brains[actor.team].idle_seconds-idle})
 		actor.advance(direction, delta, island)
+		if actor.team > 0: telemetry.motion(actor,brains[actor.team].tactical_action)
 	_resolve_attacks()
 	if state != State.PLAYING:
 		return
@@ -316,16 +405,22 @@ func _physics_process(delta: float) -> void:
 		if state != State.PLAYING:
 			return
 	camera.position = actors[0].position + Vector2(0, -90)
+	_check_victory(0)
+	if state == State.PLAYING and arrival_elapsed >= 30:
+		arrival_elapsed = fmod(arrival_elapsed,30)
+		try_newcomer()
 
 func try_newcomer() -> bool:
-	if state != State.PLAYING or territory.fractions[0] >= 0.4: return false
+	if state != State.PLAYING: return false
 	var active: int = 0
+	var team := -1
 	var used: Array[int] = []
 	for actor in actors:
 		if actor.active:
 			used.append(config.cat_indices[actor.team])
 			if actor.team > 0: active += 1
-	if active >= [3,5,7][difficulty]: return false
+		elif actor.team > 0 and team < 0: team = actor.team
+	if active > [2,3,4][difficulty] or team < 0: return false
 	var spawn := Vector2.ZERO
 	var patch := PackedVector2Array()
 	for attempt in 80:
@@ -346,33 +441,33 @@ func try_newcomer() -> bool:
 	var variant: int = 1
 	while used.has(variant) and variant <= 7: variant += 1
 	if variant > 7: return false
-	var team: int = actors.size()
-	config.spawn_points.append(spawn)
-	config.cat_indices.resize(maxi(config.cat_indices.size(),team+1))
-	config.team_colors.resize(maxi(config.team_colors.size(),team+1))
+	config.spawn_points[team] = spawn
 	config.cat_indices[team] = variant
 	config.team_colors[team] = [Color("9b5cff"),Color("ff5b68"),Color("ffd33d"),Color("59d68b"),Color("23cde3"),Color("ff993f"),Color("f777c5"),Color("4388f4")][variant]
-	territory.initial.append([patch])
-	territory.regions.append([patch])
-	territory.fractions.append(0)
+	territory.cancel_preview(team)
+	territory.initial[team] = [patch]
+	territory.regions[team] = [patch]
 	var actor: ConquerCharacter = CHARACTER_SCENE.instantiate()
 	actor.setup(team,config)
 	world_root.add_child(actor.trail)
 	world_root.add_child(actor)
 	actor.reset_actor()
-	actors.append(actor)
+	actors[team].trail.queue_free()
+	actors[team].queue_free()
+	actors[team] = actor
 	var brain := BotBrain.new(randi())
 	brain.reset()
-	brains.append(brain)
-	home_points.append(spawn)
-	home_regions.append(patch)
+	brains[team] = brain
+	home_points[team] = spawn
+	home_regions[team] = patch
 	var name: String = ""
 	for candidate in campaign.round_names(8).slice(1):
 		if not player_names.has(candidate):
 			name = candidate
 			break
-	if name.is_empty(): name = "Voyager " + str(team)
-	player_names.append(name)
+	newcomer_serial += 1
+	if name.is_empty(): name = "Voyager " + str(newcomer_serial)
+	player_names[team] = name
 	hud.player_names = player_names
 	var label := Label.new()
 	label.text = name
@@ -382,7 +477,7 @@ func try_newcomer() -> bool:
 	label.add_theme_font_override("font",hud.font)
 	actor.add_child(label)
 	territory._update_fractions()
-	hud.show_toast(name+" joined the island!")
+	hud.show_toast(name.to_upper()+" ENTERS THE BATTLE!")
 	return true
 
 func _resolve_attacks() -> void:
@@ -411,9 +506,14 @@ func _resolve_attacks() -> void:
 		if team > 0:
 			eliminate_bot(team, int(killers.get(team, -1)))
 	if defeated.has(0):
-		actors[0].trail.clear()
-		_set_state(State.DEFEATED)
+		_defeat_player(int(killers.get(0,-1)), "trail")
 		return
+	_check_victory(0)
+
+func _defeat_player(attacker: int, method: String) -> void:
+	telemetry.record("elimination",{"team":0,"attacker":attacker,"credited":true,"time":active_seconds,"method":method})
+	actors[0].trail.clear()
+	_set_state(State.DEFEATED)
 
 func _home_entry(actor: ConquerCharacter) -> float:
 	if territory.owned(actor.team, actor.previous):
@@ -463,7 +563,8 @@ func _update_trail_segment(actor: ConquerCharacter) -> void:
 			if actor.trail.points.size() >= 2:
 				actor.trail.append_point(start)
 				var before: float = territory.fractions[actor.team]
-				var claimed := territory.capture(actor.team,actor.trail.points,actor.trail.departure)
+				var prepared := actor.trail.prepare_capture(territory.regions[actor.team],true)
+				var claimed := territory.capture(actor.team,actor.trail.points,actor.trail.departure,prepared)
 				if claimed and actor.team > 0 and brains[actor.team].has_method("note_capture"):
 					brains[actor.team].note_capture(territory.fractions[actor.team]-before,territory)
 				if actor.team == 0 and not territory.last_capture_error.is_empty(): hud.show_toast(territory.last_capture_error)
@@ -479,6 +580,7 @@ func _update_trail_segment(actor: ConquerCharacter) -> void:
 				var old_direction: Vector2 = actor.trail.points[-2].direction_to(actor.trail.points[-1])
 				if old_direction.dot(start.direction_to(finish)) < 0.95 and actor.trail.points[-1].distance_to(start) > 0.01: actor.trail.append_point(start)
 			if actor.trail.points[-1].distance_to(finish) >= config.trail_spacing: actor.trail.append_point(finish)
+			actor.trail.prepare_capture(territory.regions[actor.team])
 			if actor.trail.points.size() >= config.max_trail_points:
 				reset_character(actor.team)
 				return
@@ -527,20 +629,37 @@ func reset_character(team: int) -> void:
 	if team != 0:
 		hud.show_toast("%s is heading home!" % player_names[team])
 
+func _capture_committed(team: int, gain: float, at: Vector2) -> void:
+	_captured(team,gain,at)
+	var victims: Array[int] = []
+	for actor in actors:
+		if actor.active and actor.team != team and territory.newly_encircles(actor.position):
+			victims.append(actor.team)
+	for victim in victims:
+		if victim > 0: eliminate_bot(victim,team,"encirclement")
+	if victims.has(0):
+		_defeat_player(team,"encirclement")
+		return
+	_check_victory(team)
+
 func _captured(team: int, gain: float, at: Vector2) -> void:
+	telemetry.record("capture",{"team":team,"gain":gain,"time":active_seconds})
 	hud.update_scores(territory.fractions)
 	popups.append({"position": at, "text": "+%.1f%%" % (gain * 100), "life": 1.4, "team": team})
 	if team == 0:
-		hud.show_toast("Nice loop! +%.1f%% island claimed" % (gain * 100))
-	if territory.fractions[team] >= config.win_fraction:
-		if team == 0:
-			campaign.conquer(selected_country)
-			wallet.transact("country:" + selected_country, wallet.settings.completion_coins)
-			if active_seconds >= 120:
-				wallet.transact("objective:" + match_id, wallet.settings.objective_coins)
-			_wallet_ui()
-		winning_team = team
-		_set_state(State.ROUND_OVER)
+		hud.show_toast("TERRITORY CAPTURED! +%.1f%%" % (gain * 100))
+func _check_victory(team: int) -> void:
+	if state != State.PLAYING or not actors[team].active or territory.fractions[team] < config.win_fraction: return
+	for opponent in actors:
+		if opponent.active and opponent.team != team: return
+	if team == 0:
+		campaign.conquer(selected_country)
+		wallet.transact("country:" + selected_country, wallet.settings.completion_coins)
+		if active_seconds >= 120:
+			wallet.transact("objective:" + match_id, wallet.settings.objective_coins)
+		_wallet_ui()
+	winning_team = team
+	_set_state(State.ROUND_OVER)
 
 func pause_round() -> void:
 	if state == State.PLAYING:
@@ -669,7 +788,7 @@ func _revive_player() -> void:
 	actor.previous = safe
 	actor.movement_path = PackedVector2Array([safe])
 	actor.trail.clear()
-	actor.protection = wallet.settings.shield_seconds
+	actor.protection = wallet.settings.shield_seconds + actor.revival_shield_bonus
 	home_points[0] = safe
 	home_regions[0] = territory.region_at(0, safe)
 	_set_state(State.PLAYING)
@@ -696,9 +815,10 @@ func _revival_land() -> Array:
 	hud.show_toast("No safe neutral land. Restart for free.")
 	return []
 
-func eliminate_bot(team: int, attacker: int = -1) -> void:
+func eliminate_bot(team: int, attacker: int = -1, method: String = "trail") -> void:
 	if team <= 0 or not actors[team].active:
 		return
+	telemetry.record("elimination",{"team":team,"attacker":attacker,"credited":attacker >= 0 and actors[attacker].active,"time":active_seconds,"method":method})
 	actors[team].active = false
 	actors[team].hide()
 	actors[team].trail.clear()

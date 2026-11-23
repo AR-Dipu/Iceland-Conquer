@@ -45,10 +45,13 @@ func _finish(value: Dictionary) -> void:
 	done = true
 func _clip() -> void:
 	var faces: Array = topology.result.faces.duplicate()
+	var enclosed_count := 0
+	var enclosed_faces: Array = faces.duplicate()
 	if ribbon: faces.append_array(Geometry2D.offset_polyline(path,3.75,Geometry2D.JOIN_ROUND,Geometry2D.END_ROUND))
 	var pieces: Array[PackedVector2Array] = []
 	var total: float = 0
-	for face in faces:
+	for face_index in faces.size():
+		var face: PackedVector2Array = faces[face_index]
 		if Time.get_ticks_usec() >= deadline: await continued
 		if canceled: return
 		for clipped in Geometry2D.intersect_polygons(face,island):
@@ -72,5 +75,6 @@ func _clip() -> void:
 					_finish({"ok":false,"pieces":[],"area":0.0})
 					return
 				pieces.append(clean)
+				if face_index < enclosed_faces.size(): enclosed_count += 1
 				total += IslandGeometry.area(clean)
-	_finish({"ok":true,"pieces":pieces,"area":total})
+	_finish({"ok":true,"pieces":pieces,"area":total,"enclosed_faces":enclosed_faces,"enclosed_count":enclosed_count})

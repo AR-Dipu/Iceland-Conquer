@@ -1,13 +1,29 @@
 class_name IslandGeometry
 extends RefCounted
 static var subtraction_errors: int = 0
+static var triangle_cache: Dictionary = {}
+static var bounds_cache: Dictionary = {}
+static var area_cache: Dictionary = {}
+
+static func triangles_cached(poly: PackedVector2Array) -> PackedInt32Array:
+	var key := hash(poly)
+	if triangle_cache.has(key) and triangle_cache[key].polygon == poly: return triangle_cache[key].indices
+	if triangle_cache.size() >= 2048: triangle_cache.erase(triangle_cache.keys()[0])
+	var result := Geometry2D.triangulate_polygon(poly)
+	triangle_cache[key] = {"polygon":poly.duplicate(),"indices":result}
+	return result
 ## Continuous polygon helpers. Clockwise contours in Godot booleans are holes.
 
 static func area(poly: PackedVector2Array) -> float:
+	var key := hash(poly)
+	if area_cache.has(key) and area_cache[key].polygon == poly: return area_cache[key].area
 	var result: float = 0.0
 	for i in poly.size():
 		result += poly[i].cross(poly[(i + 1) % poly.size()])
-	return absf(result) * 0.5
+	result = absf(result)*0.5
+	if area_cache.size() >= 2048: area_cache.erase(area_cache.keys()[0])
+	area_cache[key] = {"polygon":poly.duplicate(),"area":result}
+	return result
 
 static func blob(center: Vector2, radius: Vector2, phase: float = 0.0, count: int = 96) -> PackedVector2Array:
 	var poly := PackedVector2Array()
@@ -37,9 +53,10 @@ static func nearest(poly: PackedVector2Array, point: Vector2) -> Dictionary:
 static func simple(poly: PackedVector2Array) -> bool:
 	if poly.size() < 3 or area(poly) < 8.0:
 		return false
-	return not Geometry2D.triangulate_polygon(poly).is_empty()
+	return not triangles_cached(poly).is_empty()
 
 static func subtract(subject: PackedVector2Array, cutter: PackedVector2Array, depth: int = 0) -> Array[PackedVector2Array]:
+	if not bounds(subject).grow(0.005).intersects(bounds(cutter).grow(0.005)): return [subject]
 	var result: Array[PackedVector2Array] = Geometry2D.clip_polygons(subject, cutter)
 	var hole := PackedVector2Array()
 	for p in result:
@@ -81,6 +98,7 @@ static func merge_regions(polys: Array[PackedVector2Array]) -> Array[PackedVecto
 		changed = false
 		for i in result.size():
 			for j in range(i + 1, result.size()):
+				if not bounds(result[i]).grow(0.02).intersects(bounds(result[j]).grow(0.02)): continue
 				var merged: Array[PackedVector2Array] = Geometry2D.merge_polygons(result[i], result[j])
 				if merged.size() == 1 and not Geometry2D.is_polygon_clockwise(merged[0]) and simple(clean_polygon(merged[0])):
 					result[i] = clean_polygon(merged[0])
@@ -146,8 +164,28 @@ static func face_area(poly: PackedVector2Array) -> float:
 
 static func split_faces(poly: PackedVector2Array, depth: int = 0) -> Array[PackedVector2Array]:
 	if depth > 64 or poly.size() < 3: return []
+	# Keep the original i/j resolution order while avoiding all-pairs native
+	# intersection calls on long sampled contours. Broad-phase buckets include
+	# endpoints and a tolerance; the exact segment predicate remains unchanged.
+	var buckets: Dictionary = {}
+	var peers: Array = []
+	for i in poly.size(): peers.append({})
+	for j in poly.size():
+		var a: Vector2 = poly[j]
+		var b: Vector2 = poly[(j+1)%poly.size()]
+		var lo := Vector2i(floori((minf(a.x,b.x)-0.001)/128),floori((minf(a.y,b.y)-0.001)/128))
+		var hi := Vector2i(floori((maxf(a.x,b.x)+0.001)/128),floori((maxf(a.y,b.y)+0.001)/128))
+		for x in range(lo.x,hi.x+1):
+			for y in range(lo.y,hi.y+1):
+				var key := Vector2i(x,y)
+				for i in buckets.get(key,[]):
+					if j >= i+2: peers[i][j] = true
+				if not buckets.has(key): buckets[key] = []
+				buckets[key].append(j)
 	for i in poly.size():
-		for j in range(i+2,poly.size()):
+		var candidates: Array = peers[i].keys()
+		candidates.sort()
+		for j in candidates:
 			if i == 0 and j == poly.size()-1: continue
 			var hit: Variant = Geometry2D.segment_intersects_segment(poly[i],poly[(i+1)%poly.size()],poly[j],poly[(j+1)%poly.size()])
 			if hit == null: continue
@@ -207,9 +245,13 @@ static func soften(poly: PackedVector2Array, radius: float = 11.0) -> PackedVect
 static func bounds(poly: PackedVector2Array) -> Rect2:
 	if poly.is_empty():
 		return Rect2()
+	var key := hash(poly)
+	if bounds_cache.has(key) and bounds_cache[key].polygon == poly: return bounds_cache[key].bounds
 	var rect := Rect2(poly[0], Vector2.ZERO)
 	for point in poly:
 		rect = rect.expand(point)
+	if bounds_cache.size() >= 2048: bounds_cache.erase(bounds_cache.keys()[0])
+	bounds_cache[key] = {"polygon":poly.duplicate(),"bounds":rect}
 	return rect
 
 static func interior_point(poly: PackedVector2Array) -> Vector2:

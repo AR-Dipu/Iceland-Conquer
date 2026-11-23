@@ -1,89 +1,77 @@
 class_name IslandWorld
 extends Node2D
+## Legacy class name retained. All rendered geography now represents countries.
 var map: CountryMap
 var outline := PackedVector2Array()
-var props: Texture2D = preload("res://assets/environment/tropical_props.png")
-var clock: float = 0.0
-var refresh: float = 0.0
-var shore_cache: Dictionary = {}
-
+var props: Texture2D = preload("res://assets/environment/atlas_landmarks.svg")
+var context: CountryPresentation
+var land_mesh: ArrayMesh
+var decorative_meshes: Array[ArrayMesh] = []
+var relief := PackedVector2Array()
+var waves := PackedVector2Array()
 func setup(country: CountryMap) -> void:
 	map = country
-	outline = map.outline
+	outline = country.outline
 	z_index = -10
+	context = CountryPresentation.for_country(country)
+	land_mesh = CountryPresentation._mesh(outline,Geometry2D.triangulate_polygon(outline))
+	for ring in country.decorative_islands:
+		var indices := Geometry2D.triangulate_polygon(ring)
+		if not indices.is_empty(): decorative_meshes.append(CountryPresentation._mesh(ring,indices))
+	_prepare_atlas_marks()
 	for prop in map.scenery:
-		_add_prop(int(prop.cell), prop.position, float(prop.width))
-	for polygon in [outline]+Array(map.decorative_islands):
-		var shore := _shore(polygon)
-		if shore.is_empty(): continue
-		var water := Line2D.new()
-		water.points = _shift(shore,Vector2(0,17))
-		water.closed = true
-		water.width = 16
-		water.default_color = Color(0.62,1,1,0.5)
-		water.antialiased = true
-		var glow := ShaderMaterial.new()
-		glow.shader = preload("res://assets/shaders/trail_glow.gdshader")
-		water.material = glow
-		add_child(water)
+		var cell := int(prop.cell)
+		if (cell == 0 or cell == 3) and absf(map.latitude) > 32: cell = 3
+		elif cell == 3: cell = 0
+		_add_prop(cell,prop.position,float(prop.width))
+	# Actual shared borders receive a narrow land apron to cover the visual
+	# smoothing offset; this changes no collision or ownership geometry.
 	queue_redraw()
 
+func _prepare_atlas_marks() -> void:
+	var bounds := map.land_bounds
+	for i in 180:
+		var point := bounds.position + Vector2(fmod(i*173.7,bounds.size.x),fmod(i*271.3,bounds.size.y))
+		if not Geometry2D.is_point_in_polygon(point,outline): continue
+		for stripe in 3:
+			var a := point + Vector2(stripe*6,-stripe*2)
+			var b := a + Vector2(9,-8)
+			if ShoreIndex.segment_inside(outline,a,b):
+				relief.append(a)
+				relief.append(b)
+	for coast in context.coasts:
+		for i in range(0,coast.size()-1,3):
+			var direction := coast[i].direction_to(coast[i+1])
+			var offset := direction.orthogonal()*15
+			if Geometry2D.is_point_in_polygon(coast[i]+offset,outline): offset = -offset
+			waves.append(coast[i]+offset)
+			waves.append(coast[i].lerp(coast[i+1],0.65)+offset)
 func _add_prop(cell: int, foot: Vector2, width: float) -> void:
 	var sprite := Sprite2D.new()
 	var texture := AtlasTexture.new()
 	texture.atlas = props
-	var size := Vector2(props.get_width(), props.get_height()) / 2.0
-	texture.region = Rect2(Vector2(cell % 2, cell / 2) * size, size)
+	var cell_size := Vector2(props.get_width(),props.get_height())/2.0
+	texture.region = Rect2(Vector2(cell%2,cell/2)*cell_size,cell_size)
 	sprite.texture = texture
-	sprite.scale = Vector2.ONE * width / size.x
-	sprite.position = foot - Vector2(0, width * 0.44)
+	sprite.scale = Vector2.ONE*width/cell_size.x
+	sprite.position = foot-Vector2(0,width*0.44)
 	sprite.z_index = 21
 	add_child(sprite)
-
-func _process(delta: float) -> void:
-	clock += delta
-	# Terrain, polygon offsets, cliffs and grain remain cached. Native water
-	# strokes animate their shader without rebuilding the whole island.
-
-func _shore(poly: PackedVector2Array) -> PackedVector2Array:
-	var key := hash(poly)
-	if not shore_cache.has(key):
-		var shores := Geometry2D.offset_polygon(poly,18,Geometry2D.JOIN_ROUND)
-		shore_cache[key] = shores[0] if not shores.is_empty() else PackedVector2Array()
-	return shore_cache[key]
-
-func _shift(poly: PackedVector2Array, offset: Vector2) -> PackedVector2Array:
-	var result := PackedVector2Array()
-	for p in poly:
-		result.append(p + offset)
-	return result
-
-func _ring(poly: PackedVector2Array, width: float, tint: Color) -> void:
-	if poly.is_empty():
-		return
-	var closed := poly.duplicate()
-	closed.append(poly[0])
-	draw_polyline(closed, tint, width, true)
-
-func _land(poly: PackedVector2Array, decorative: bool = false) -> void:
-	var shore := _shore(poly)
-	if shore.is_empty():
-		return
-	_ring(_shift(shore, Vector2(0, 24)), 36, Color(0, 0.23, 0.40, 0.17))
-	draw_colored_polygon(_shift(shore, Vector2(0, 23)), Color("b88d50"))
-	draw_colored_polygon(_shift(shore, Vector2(0, 11)), Color("e4ba7c"))
-	draw_colored_polygon(shore, Color("ffe3a0"))
-	_ring(shore, 3, Color("fff1c4"))
-	draw_colored_polygon(poly, Color("b1df68") if not decorative else Color("8ecf65"))
-	_ring(poly, 2, Color("d0ed87"))
-
 func _draw() -> void:
-	if map == null:
-		return
-	for ring in map.decorative_islands:
-		_land(ring, true)
-	_land(outline)
-	for i in 180:
-		var p := Vector2(fmod(i * 173.7, map.land_bounds.size.x), fmod(i * 271.3, map.land_bounds.size.y))
-		if Geometry2D.is_point_in_polygon(p, outline):
-			draw_circle(p, 1.8, Color(0.91, 1, 0.62, 0.40))
+	if map == null or context == null: return
+	for item in context.lands: draw_mesh(item.mesh,null,Transform2D.IDENTITY,Color("9b9a76"))
+	for border in context.borders:
+		if border.size() > 1: draw_polyline(border,Color("9b9a76"),42,true)
+	for mesh in decorative_meshes: draw_mesh(mesh,null,Transform2D.IDENTITY,Color("c7c297"))
+	draw_mesh(land_mesh,null,Transform2D.IDENTITY,Color("dfcea1"))
+	if not waves.is_empty(): draw_multiline(waves,Color("83a9a4"),1.3,true)
+	if not relief.is_empty(): draw_multiline(relief,Color(0.42,0.34,0.20,0.24),1.25,true)
+	for coast in context.coasts:
+		if coast.size() > 1: draw_polyline(coast,Color("e6d5ac"),4,true)
+	var closed := outline.duplicate()
+	closed.append(outline[0])
+	draw_polyline(closed,Color("343f37"),5,true)
+	draw_polyline(closed,Color("c1a76e"),1.2,true)
+	for item in context.lands:
+		if item.show_label and map.land_bounds.grow(1000).has_point(item.label) and not Geometry2D.is_point_in_polygon(item.label,outline):
+			draw_string(ConquestTheme.get_font(),item.label,item.name.to_upper(),HORIZONTAL_ALIGNMENT_CENTER,220,19,Color("e0e7c8"))

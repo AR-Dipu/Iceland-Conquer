@@ -4,46 +4,52 @@ extends RefCounted
 ## Only bounded faces incident to the trail are eligible; no smaller-side rule.
 static func enclosed(owned: Array, trail: PackedVector2Array) -> Dictionary:
 	if trail.size() < 2: return {"ok":true,"faces":[]}
-	var segments: Array = []
+	var prepared := begin(owned)
+	for i in trail.size()-1:
+		append_segment(prepared,trail[i],trail[i+1],true)
+	return enclosed_prepared(prepared)
+
+static func begin(owned: Array) -> Dictionary:
+	var prepared := {"segments":[],"buckets":{}}
 	for polygon in owned:
 		for i in polygon.size():
-			if polygon[i].distance_to(polygon[(i+1)%polygon.size()]) > 0.002:
-				segments.append({"a":polygon[i],"b":polygon[(i+1)%polygon.size()],"trail":false,"cuts":[0.0,1.0]})
-	for i in trail.size()-1:
-		if trail[i].distance_to(trail[i+1]) > 0.002: segments.append({"a":trail[i],"b":trail[i+1],"trail":true,"cuts":[0.0,1.0]})
+			append_segment(prepared,polygon[i],polygon[(i+1)%polygon.size()],false)
+	return prepared
+
+static func append_segment(prepared: Dictionary, start: Vector2, finish: Vector2, is_trail: bool) -> void:
+	if start.distance_to(finish) <= 0.002: return
+	var segments: Array = prepared.segments
+	var buckets: Dictionary = prepared.buckets
+	var a := {"a":start,"b":finish,"trail":is_trail,"cuts":[0.0,1.0]}
+	var lo := Vector2i(floori((minf(start.x,finish.x)-0.001)/16),floori((minf(start.y,finish.y)-0.001)/16))
+	var hi := Vector2i(floori((maxf(start.x,finish.x)+0.001)/16),floori((maxf(start.y,finish.y)+0.001)/16))
+	var peers: Dictionary = {}
+	for x in range(lo.x,hi.x+1):
+		for y in range(lo.y,hi.y+1):
+			var key := Vector2i(x,y)
+			if not buckets.has(key): buckets[key] = []
+			for index in buckets[key]: peers[index] = true
+			buckets[key].append(segments.size())
+	var ordered := peers.keys()
+	ordered.sort()
+	for index in ordered:
+		var b: Dictionary = segments[index]
+		if maxf(start.x,finish.x)+0.001 < minf(b.a.x,b.b.x) or maxf(b.a.x,b.b.x)+0.001 < minf(start.x,finish.x) or maxf(start.y,finish.y)+0.001 < minf(b.a.y,b.b.y) or maxf(b.a.y,b.b.y)+0.001 < minf(start.y,finish.y): continue
+		var hit: Variant = Geometry2D.segment_intersects_segment(start,finish,b.a,b.b)
+		if hit != null:
+			_cut(a,hit)
+			_cut(b,hit)
+		else:
+			for point in [start,finish]:
+				if point.distance_to(Geometry2D.get_closest_point_to_segment(point,b.a,b.b)) < 0.001: _cut(b,point)
+			for point in [b.a,b.b]:
+				if point.distance_to(Geometry2D.get_closest_point_to_segment(point,start,finish)) < 0.001: _cut(a,point)
+	segments.append(a)
+
+static func enclosed_prepared(prepared: Dictionary) -> Dictionary:
+	var segments: Array = prepared.segments
 	if segments.size() > 6000: return {"ok":false,"faces":[]}
-	# Broad phase: compare only segments sharing a spatial bucket. Keep sorted
-	# pair order so topology and collinear endpoint handling remain deterministic.
-	var buckets: Dictionary = {}
-	var candidates: Array = []
-	for i in segments.size():
-		var s: Dictionary = segments[i]
-		var lo := Vector2i(floori((minf(s.a.x,s.b.x)-0.001)/128),floori((minf(s.a.y,s.b.y)-0.001)/128))
-		var hi := Vector2i(floori((maxf(s.a.x,s.b.x)+0.001)/128),floori((maxf(s.a.y,s.b.y)+0.001)/128))
-		var peers: Dictionary = {}
-		for x in range(lo.x,hi.x+1):
-			for y in range(lo.y,hi.y+1):
-				var key := Vector2i(x,y)
-				for j in buckets.get(key,[]): peers[j] = true
-				if not buckets.has(key): buckets[key] = []
-				buckets[key].append(i)
-		var ordered: Array = peers.keys()
-		ordered.sort()
-		candidates.append(ordered)
-	for i in segments.size():
-		var a: Dictionary = segments[i]
-		for j in candidates[i]:
-			var b: Dictionary = segments[j]
-			if maxf(a.a.x,a.b.x)+0.001 < minf(b.a.x,b.b.x) or maxf(b.a.x,b.b.x)+0.001 < minf(a.a.x,a.b.x) or maxf(a.a.y,a.b.y)+0.001 < minf(b.a.y,b.b.y) or maxf(b.a.y,b.b.y)+0.001 < minf(a.a.y,a.b.y): continue
-			var hit: Variant = Geometry2D.segment_intersects_segment(a.a,a.b,b.a,b.b)
-			if hit != null:
-				_cut(a,hit)
-				_cut(b,hit)
-			else:
-				for p in [a.a,a.b]:
-					if p.distance_to(Geometry2D.get_closest_point_to_segment(p,b.a,b.b)) < 0.001: _cut(b,p)
-				for p in [b.a,b.b]:
-					if p.distance_to(Geometry2D.get_closest_point_to_segment(p,a.a,a.b)) < 0.001: _cut(a,p)
+	var phase_began := WorkMetrics.start()
 	var vertices: Array[Vector2] = []
 	var ids: Dictionary = {}
 	var neighbors: Array = []
@@ -62,6 +68,8 @@ static func enclosed(owned: Array, trail: PackedVector2Array) -> Dictionary:
 				trail_edges[Vector2i(v,u)] = true
 	for u in vertices.size():
 		neighbors[u].sort_custom(func(a: int,b: int) -> bool: return (vertices[a]-vertices[u]).angle() < (vertices[b]-vertices[u]).angle())
+	WorkMetrics.finish("topology_graph",phase_began)
+	phase_began = WorkMetrics.start()
 	var visited: Dictionary = {}
 	var faces: Array[PackedVector2Array] = []
 	for start in vertices.size():
@@ -89,6 +97,7 @@ static func enclosed(owned: Array, trail: PackedVector2Array) -> Dictionary:
 			if touched and polygon.size() >= 3 and not Geometry2D.is_polygon_clockwise(polygon):
 				for face in IslandGeometry.split_faces(IslandGeometry.clean_polygon(polygon)):
 					if IslandGeometry.simple(face): faces.append(face)
+	WorkMetrics.finish("topology_faces",phase_began)
 	return {"ok":true,"faces":faces}
 
 static func _cut(segment: Dictionary, p: Vector2) -> void:

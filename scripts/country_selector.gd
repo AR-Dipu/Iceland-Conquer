@@ -90,12 +90,12 @@ func _draw() -> void:
 	if catalog == null:
 		return
 	text("Y O U R   N E X T   A D V E N T U R E", Vector2(32, 43), 15, Color("a8f3e9"))
-	text("ISLAND", Vector2(28, 105), 53, Color("ffe28a"))
+	text("COUNTRY", Vector2(28, 105), 53, Color("ffe28a"))
 	text("CONQUER", Vector2(28, 163), 53)
-	text("Pick a country. Make it your island.", Vector2(31, 197), 20, Color("bdf3f6"))
+	text("Choose your country. Begin your conquest.", Vector2(31, 197), 20, Color("bdf3f6"))
 	draw_texture_rect(mascot, Rect2(508, 48, 155, 155), false)
 	draw_style_box(box(Color(0.015, 0.23, 0.34, 0.94)), Rect2(28, 227, 664, 355))
-	text("CHOOSE YOUR ISLAND", Vector2(49, 260), 18, Color("f7e8b0"))
+	text("CHOOSE YOUR COUNTRY", Vector2(49, 260), 18, Color("f7e8b0"))
 	text("5 COUNTRIES UNLOCKED", Vector2(465, 260), 13, Color("a8e6e8"))
 	for line in range(1, 5):
 		var y: float = 280 + line * 54
@@ -113,7 +113,7 @@ func _draw() -> void:
 		draw_circle(p, 7.5, Color("c99bff") if id == selected.country_id else Color("ffe39a"))
 		draw_circle(p, 3, Color.WHITE)
 	text("FIVE COUNTRIES. ONE CROWN.", Vector2(31, 608), 15, Color("cef5ef"))
-	text("ALL ISLANDS", Vector2(530, 791), 19, Color("ffe28a"), true)
+	text("WORLD CAMPAIGN", Vector2(530, 791), 19, Color("ffe28a"), true)
 	text("READY TO EXPLORE", Vector2(530, 813), 13, Color("c1ecee"), true)
 	draw_style_box(box(Color("07516c")), Rect2(28, 860, 664, 216))
 	var transform: Transform2D = preview_transform(selected, Rect2(49, 883, 185, 168))
@@ -124,7 +124,7 @@ func _draw() -> void:
 	draw_polyline(border, Color("ffe5a4"), 6, true)
 	text(selected.display_name.to_upper(), Vector2(262, 905), 29, Color("ffe6a1"))
 	text("YOUR NEXT CONQUEST", Vector2(263, 935), 14, Color("c8a9ff"))
-	text("Honshu + offshore scenery" if selected.country_id == "jpn" else "A country-shaped tropical island", Vector2(263, 974), 17)
+	text("Honshu campaign" if selected.country_id == "jpn" else "Your next country conquest", Vector2(263, 974), 17)
 	text("Bigger world. Smooth camera.", Vector2(263, 1005), 17, Color("c5f1ef"))
 	text("Purple is you. Reach 100% to win.", Vector2(263, 1036), 17, Color("dac7ff"))
 	if not message.is_empty():

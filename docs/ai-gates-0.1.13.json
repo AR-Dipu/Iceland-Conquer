@@ -1,0 +1,59 @@
+{
+  "scenarios": 30,
+  "countries": [
+    {
+      "country": "bgd",
+      "baseline": 0.554858838097986,
+      "previous": 0.415315202505466,
+      "candidate": 0.489719591850621
+    },
+    {
+      "country": "ind",
+      "baseline": 0.507741119531067,
+      "previous": 0.436237751181704,
+      "candidate": 0.498570418659949
+    },
+    {
+      "country": "lka",
+      "baseline": 0.564098566496886,
+      "previous": 0.494174166846832,
+      "candidate": 0.449496175921735
+    },
+    {
+      "country": "jpn",
+      "baseline": 0.517329744656105,
+      "previous": 0.498920150054125,
+      "candidate": 0.541982055188018
+    },
+    {
+      "country": "isl",
+      "baseline": 0.421492916512834,
+      "previous": 0.324188348575115,
+      "candidate": 0.542964237114089
+    }
+  ],
+  "baseline": {
+    "cuts": 63,
+    "survivors": 42,
+    "abandoned": 175,
+    "wins": 0,
+    "expansion_reverse": 1905.7911850661044
+  },
+  "previous": {
+    "cuts": 68,
+    "survivors": 37,
+    "abandoned": 191,
+    "wins": 0,
+    "expansion_reverse": 1207.2816682457915
+  },
+  "candidate": {
+    "cuts": 77,
+    "survivors": 27,
+    "abandoned": 208,
+    "wins": 0,
+    "expansion_reverse": 2565.3868008852005
+  },
+  "land_gate": false,
+  "cuts_gate": true,
+  "reverse_gate": false
+}

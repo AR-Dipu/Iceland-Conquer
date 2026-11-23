@@ -4,9 +4,29 @@ extends Node2D
 var points := PackedVector2Array():
 	set(value):
 		points = value
+		prepared_capture = {}
 		stroke_dirty = true
 		indexed_count = 0
 var departure := PackedVector2Array()
+var prepared_capture: Dictionary = {}
+var prepared_owner: Array = []
+var prepared_points: int = 0
+
+func prepare_capture(owned: Array, closing: bool = false) -> Dictionary:
+	if points.size() < 2: return {}
+	if prepared_capture.is_empty() or prepared_owner != owned or prepared_points > points.size():
+		if closing or points.size() > 8: return {}
+		var vertices := 0
+		for polygon in owned: vertices += polygon.size()
+		if vertices > 220: return {}
+		prepared_owner = owned.duplicate()
+		prepared_capture = CaptureTopology.begin(owned)
+		prepared_points = 1
+	if closing and points.size() - prepared_points > 2: return {}
+	for i in range(prepared_points, points.size()):
+		CaptureTopology.append_segment(prepared_capture, points[i-1], points[i], true)
+	prepared_points = points.size()
+	return prepared_capture
 var tint: Color = Color.CYAN
 var age: float = 0.0
 var stroke_dirty: bool = true
@@ -46,6 +66,9 @@ func _index_segment(i: int) -> void:
 
 func clear() -> void:
 	points.clear()
+	prepared_capture = {}
+	prepared_owner.clear()
+	prepared_points = 0
 	departure.clear()
 	stroke_dirty = true
 	cells.clear()
